@@ -1,0 +1,40 @@
+[package]
+name = "redmine-desktop"
+version = "0.1.0"
+description = "Weekly timesheet for Redmine"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "redmine_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Default TLS on macOS is Secure Transport, so certificates from a company CA
+# that are trusted in the system Keychain also work for self-hosted Redmine.
+reqwest = { version = "0.12", features = ["json"] }
+# Non-secret settings (instance URL, week start) as JSON in the app data dir.
+tauri-plugin-store = "2"
+# Local listener for the browser sign-in callback.
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util", "time", "sync"] }
+# Opens the sign-in page in the default browser.
+open = "5"
+# Encrypted storage for the API key and sign-in token (src/secrets.rs). No OS keychain,
+# so there are no OS prompts and the behaviour is identical on every platform.
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+machine-uid = "0.5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
