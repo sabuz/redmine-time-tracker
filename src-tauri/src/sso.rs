@@ -89,10 +89,13 @@ async fn request_signin_url(http: &reqwest::Client, host: &str, callback: &str) 
     let status = resp.status();
     let body = resp.text().await.map_err(|e| e.to_string())?;
     let url = body.trim();
-    if status.is_success() && Url::parse(url).is_ok() {
-        Ok(url.to_string())
-    } else {
-        Err(format!("answered {status}"))
+    if !status.is_success() {
+        return Err(format!("answered {status}"));
+    }
+    // This address is opened on the user's Mac, so it has to be a web page, whatever the server said.
+    match Url::parse(url) {
+        Ok(parsed) if matches!(parsed.scheme(), "http" | "https") => Ok(url.to_string()),
+        _ => Err("returned something that isn't a web address".to_string()),
     }
 }
 
@@ -127,11 +130,11 @@ async fn wait_for_token(listener: &TcpListener) -> Result<String> {
             .and_then(|u| u.query_pairs().find(|(k, _)| k == "pomerium_jwt").map(|(_, v)| v.into_owned()))
             .filter(|t| !t.is_empty());
         let (status, message) = match token {
-            Some(_) => ("200 OK", "You're signed in. You can close this tab and return to Redmine Time."),
+            Some(_) => ("200 OK", "You're signed in. You can close this tab and return to Redmine Time Tracker."),
             None => ("404 Not Found", "Nothing here."),
         };
         let page = format!(
-            "<!doctype html><meta charset=utf-8><title>Redmine Time</title><body style=\"font:16px -apple-system,sans-serif;display:grid;place-items:center;height:90vh;color:#444\"><p>{message}</p>"
+            "<!doctype html><meta charset=utf-8><title>Redmine Time Tracker</title><body style=\"font:16px -apple-system,sans-serif;display:grid;place-items:center;height:90vh;color:#444\"><p>{message}</p>"
         );
         let reply = format!(
             "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",

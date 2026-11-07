@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::time::Duration;
 
-use reqwest::{Client, Method, StatusCode, Url};
+use reqwest::{redirect::Policy, Client, Method, StatusCode, Url};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
@@ -159,19 +159,20 @@ pub fn normalize_url(input: &str) -> Result<String> {
 const PAGE_SEGMENTS: &[&str] =
     &["my", "login", "logout", "account", "projects", "issues", "time_entries", "users", "admin", "settings", "search"];
 
-/// Hours are logged in quarter-hour steps.
+/// Redmine keeps hours to hundredths. Fixed steps (quarter hours and the like) are a company policy
+/// the app applies itself (Settings → Time increments); here the number only has to be sane.
 fn check_hours(hours: f64) -> Result<f64> {
-    let snapped = (hours * 4.0).round() / 4.0;
-    if !snapped.is_finite() || snapped <= 0.0 || snapped > 24.0 {
-        return Err("Hours must be between 0.25 and 24.".into());
+    let rounded = (hours * 100.0).round() / 100.0;
+    if !rounded.is_finite() || rounded <= 0.0 || rounded > 24.0 {
+        return Err("Hours must be between 0.01 and 24.".into());
     }
-    Ok(snapped)
+    Ok(rounded)
 }
 
-/// Did the request end up on a different origin than the one we asked? That is
-/// what a sign-in redirect from a proxy in front of Redmine looks like.
-fn left_origin(base: &str, final_url: &Url) -> bool {
-    Url::parse(base).map(|b| b.origin() != final_url.origin()).unwrap_or(false)
+/// Is `next` still Redmine's own site? Same host, on the same port, or the same host after a change of
+/// scheme (an http address that upgrades to https). Anything else is another site.
+fn same_site(base: &Url, next: &Url) -> bool {
+    base.host_str() == next.host_str() && (base.scheme() != next.scheme() || base.port_or_known_default() == next.port_or_known_default())
 }
 
 /// The server answered 2xx but not with JSON. Say what it did answer with, so
@@ -206,7 +207,7 @@ fn http_error(status: StatusCode, body: &str) -> String {
     match status {
         StatusCode::UNAUTHORIZED => "Redmine rejected the API key. Check the key, and that the REST API is enabled (Administration → Settings → API).".into(),
         StatusCode::FORBIDDEN => "Redmine refused the request (403). Either the REST API is switched off (Administration → Settings → API), or your role is missing a permission such as “Edit own spent time”.".into(),
-        StatusCode::NOT_FOUND => "Not found. Check the URL and that the REST API is enabled.".into(),
+        StatusCode::NOT_FOUND => "Not found. The entry or ticket may have been removed, or check the URL and that the REST API is enabled.".into(),
         StatusCode::UNPROCESSABLE_ENTITY => serde_json::from_str::<Value>(body)
             .ok()
             .and_then(|v| {
@@ -293,9 +294,22 @@ pub struct Redmine {
 
 impl Redmine {
     pub fn new(base: &str, key: &str, sso: Option<String>) -> Result<Self> {
+        let site = Url::parse(base).map_err(|_| "That doesn't look like a valid URL.".to_string())?;
         let http = Client::builder()
             .timeout(Duration::from_secs(20))
             .user_agent(concat!("redmine-desktop/", env!("CARGO_PKG_VERSION")))
+            // Redirects inside Redmine's own site are followed. One that leaves it is not: a company sign-in
+            // proxy sends unknown requests to its identity provider, and the API key travels in a header that
+            // an HTTP client only strips for the standard ones, so following would hand the key to that site.
+            .redirect(Policy::custom(move |attempt| {
+                if attempt.previous().len() >= 10 {
+                    attempt.error("too many redirects")
+                } else if same_site(&site, attempt.url()) {
+                    attempt.follow()
+                } else {
+                    attempt.stop()
+                }
+            }))
             .build()
             .map_err(|e| e.to_string())?;
         Ok(Self { http, base: base.to_string(), key: key.to_string(), sso })
@@ -316,6 +330,11 @@ impl Redmine {
         }
         let resp = req.send().await.map_err(|e| network_error(&self.base, &e))?;
         let status = resp.status();
+        // Redirects inside Redmine's site were followed already, so one that reaches us went elsewhere: the
+        // sign-in redirect of a proxy in front of Redmine.
+        if status.is_redirection() {
+            return Err(Error::Sso);
+        }
         let final_url = resp.url().clone();
         let content_type = resp
             .headers()
@@ -326,8 +345,8 @@ impl Redmine {
         let text = resp.text().await.map_err(|e| network_error(&self.base, &e))?;
         let is_html = content_type.contains("html");
         if !status.is_success() {
-            // A proxy's own "unauthorized" page, or a redirect to its identity provider.
-            if left_origin(&self.base, &final_url) || (is_html && text.to_lowercase().contains("pomerium")) {
+            // A proxy's own "unauthorized" page.
+            if is_html && text.to_lowercase().contains("pomerium") {
                 return Err(Error::Sso);
             }
             return Err(http_error(status, &text).into());
@@ -335,13 +354,7 @@ impl Redmine {
         if text.trim().is_empty() {
             return Ok(Value::Null);
         }
-        serde_json::from_str(&text).map_err(|_| {
-            if left_origin(&self.base, &final_url) {
-                Error::Sso
-            } else {
-                not_json_error(&final_url, &content_type, &text).into()
-            }
-        })
+        serde_json::from_str(&text).map_err(|_| Error::from(not_json_error(&final_url, &content_type, &text)))
     }
 
     async fn get(&self, path: &str, query: &Query) -> Result<Value> {
@@ -702,6 +715,76 @@ mod tests {
     }
 
     #[test]
+    fn same_site_allows_the_http_to_https_upgrade_only() {
+        let u = |s: &str| Url::parse(s).unwrap();
+        let base = u("http://rm.example.com");
+        assert!(same_site(&base, &u("http://rm.example.com/login")));
+        assert!(same_site(&base, &u("https://rm.example.com/")), "http → https on the same host");
+        assert!(!same_site(&base, &u("https://auth.example.com/")), "another host");
+        assert!(!same_site(&u("http://127.0.0.1:1"), &u("http://127.0.0.1:2/")), "another port");
+    }
+
+    #[tokio::test]
+    async fn the_api_key_is_never_sent_to_another_site() {
+        use std::sync::{Arc, Mutex};
+        // The identity provider a company proxy sends unknown requests to. It must not be asked anything.
+        let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+        let elsewhere = {
+            let seen = seen.clone();
+            spawn_server(move |_, headers| {
+                seen.lock().unwrap().push(headers.to_string());
+                html_page("<title>Sign in</title>")
+            })
+        };
+        let redmine = spawn_server(move |target, _| match target {
+            "/users/current.json" => http("302 Found", &format!("Location: {elsewhere}/signin\r\n"), ""),
+            _ => http("404 Not Found", "", ""),
+        });
+        let err = Redmine::new(&redmine, "secret-key", None).unwrap().current_user().await.unwrap_err();
+        assert!(matches!(err, Error::Sso), "{err}");
+        assert!(seen.lock().unwrap().is_empty(), "the other site received a request: {:?}", seen.lock().unwrap());
+    }
+
+    #[tokio::test]
+    async fn redirects_inside_redmines_own_site_are_followed_with_the_key() {
+        let redmine = spawn_server(|target, headers| match target {
+            "/users/current.json" => http("302 Found", "Location: /moved/current.json\r\n", ""),
+            "/moved/current.json" if headers.contains("x-redmine-api-key: k") => http(
+                "200 OK",
+                "Content-Type: application/json\r\n",
+                r#"{"user":{"id":5,"login":"alex","firstname":"Alex","lastname":"Rivera"}}"#,
+            ),
+            _ => http("404 Not Found", "", ""),
+        });
+        let me = Redmine::new(&redmine, "k", None).unwrap().current_user().await.unwrap();
+        assert_eq!(me.id, 5);
+    }
+
+    #[tokio::test]
+    async fn a_sign_in_address_must_be_a_web_address() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        // A server must not be able to make the app open a local file or another program's URL scheme.
+        let hostile = spawn_server(|_, _| http("200 OK", "Content-Type: text/plain\r\n", "file:///Applications/Calculator.app"));
+        let opened = Arc::new(AtomicBool::new(false));
+        let flag = opened.clone();
+        let (_keep, rx) = tokio::sync::oneshot::channel();
+        let err = crate::sso::pomerium_login(
+            &hostile,
+            move |_| {
+                flag.store(true, Ordering::SeqCst);
+                Ok(())
+            },
+            rx,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("isn't a web address"), "{err}");
+        assert!(!opened.load(Ordering::SeqCst), "the address was opened");
+    }
+
+    #[test]
     fn errors_serialize_with_a_kind() {
         assert_eq!(serde_json::to_value(Error::Sso).unwrap()["kind"], "sso");
         let v = serde_json::to_value(Error::from("boom")).unwrap();
@@ -709,13 +792,17 @@ mod tests {
     }
 
     #[test]
-    fn snaps_hours_to_quarters() {
-        assert_eq!(check_hours(1.1).unwrap(), 1.0);
-        assert_eq!(check_hours(1.13).unwrap(), 1.25);
+    fn keeps_hours_to_hundredths() {
+        // Fixed steps are the app's job (Settings → Time increments); here only the precision and range are checked.
+        assert_eq!(check_hours(1.1).unwrap(), 1.1);
+        assert_eq!(check_hours(1.126).unwrap(), 1.13);
         assert_eq!(check_hours(0.25).unwrap(), 0.25);
+        assert_eq!(check_hours(0.4167).unwrap(), 0.42);
+        assert_eq!(check_hours(0.1).unwrap(), 0.1);
         assert!(check_hours(0.0).is_err());
-        assert!(check_hours(0.1).is_err());
+        assert!(check_hours(0.004).is_err(), "rounds to nothing");
         assert!(check_hours(24.5).is_err());
+        assert!(check_hours(f64::NAN).is_err());
     }
 
     /// Full round trip against a real Redmine. Needs a disposable instance with
@@ -764,13 +851,13 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(created.hours, 1.0, "1.1h should snap to 1.0");
+        assert_eq!(created.hours, 1.1, "the backend no longer snaps to quarters");
         assert_eq!(created.issue_subject.as_deref(), Some(issue.subject.as_str()));
 
         let listed = rm.time_entries(me.id, day, day).await.unwrap();
         assert!(listed.iter().any(|e| e.id == created.id && e.issue_subject.is_some()));
 
-        let updated = rm.update_entry(created.id, Some(2.6), Some("edited".into()), None).await.unwrap();
+        let updated = rm.update_entry(created.id, Some(2.5), Some("edited".into()), None).await.unwrap();
         assert_eq!(updated.hours, 2.5);
         assert_eq!(updated.comments, "edited");
 

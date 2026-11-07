@@ -87,8 +87,8 @@ impl Vault {
         }
         // Write beside the target and rename, so a crash never leaves a half-written vault.
         let tmp = self.path.with_extension("tmp");
-        fs::write(&tmp, &out).map_err(|e| e.to_string())?;
-        restrict(&tmp);
+        write_private(&tmp, &out).map_err(|e| e.to_string())?;
+        restrict(&tmp); // a leftover file from an earlier crash keeps its old mode otherwise
         fs::rename(&tmp, &self.path).map_err(|e| e.to_string())
     }
 
@@ -111,6 +111,19 @@ impl Vault {
             let _ = self.write_all(&all);
         }
     }
+}
+
+/// Writes a file that is owner-only from the moment it exists, not after a later chmod.
+fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(bytes)
 }
 
 /// Owner-only permissions on Unix; defence in depth on top of the encryption.

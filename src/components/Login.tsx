@@ -6,10 +6,12 @@ interface Props {
   initialError?: string;
   /** The company sign-in (Pomerium) in front of Redmine is needed or has expired. */
   initialSso?: boolean;
+  /** A key is saved for `initialUrl`, so it needn't be typed again (no connection at launch, or the company sign-in expired). */
+  hasSavedKey?: boolean;
   onSignedIn: (session: SessionInfo) => void;
 }
 
-export function Login({ initialUrl, initialError, initialSso, onSignedIn }: Props) {
+export function Login({ initialUrl, initialError, initialSso, hasSavedKey, onSignedIn }: Props) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,8 +43,11 @@ export function Login({ initialUrl, initialError, initialSso, onSignedIn }: Prop
     }
   };
 
-  // After an expiry the saved API key is reused, so the field can stay empty.
-  const canBrowserSignIn = !!url.trim() && (!!key.trim() || !!initialSso);
+  // The saved key belongs to the address it was saved for and is reused when the field is left empty; another
+  // address needs a key typed.
+  const trimEnd = (s: string) => s.trim().replace(/\/+$/, "").toLowerCase();
+  const usesSavedKey = !!hasSavedKey && trimEnd(url) === trimEnd(initialUrl ?? "");
+  const canBrowserSignIn = !!url.trim() && (!!key.trim() || usesSavedKey);
 
   return (
     <div class="login">
@@ -54,7 +59,7 @@ export function Login({ initialUrl, initialError, initialSso, onSignedIn }: Prop
             <path d="M12 7v5l3 2" />
           </svg>
         </div>
-        <h1>Redmine Time</h1>
+        <h1>Redmine Time Tracker</h1>
         <p class="sub">Sign in to log time against your tickets.</p>
 
         <label>
@@ -76,8 +81,8 @@ export function Login({ initialUrl, initialError, initialSso, onSignedIn }: Prop
           <input
             type="password"
             value={key}
-            placeholder={initialSso ? "Saved (encrypted)" : "40-character key"}
-            autoFocus={!!initialUrl && !initialSso}
+            placeholder={usesSavedKey ? "Saved (encrypted)" : "40-character key"}
+            autoFocus={!!initialUrl && !hasSavedKey}
             autocomplete="off"
             spellcheck={false}
             onInput={(e) => setKey(e.currentTarget.value)}
@@ -92,7 +97,7 @@ export function Login({ initialUrl, initialError, initialSso, onSignedIn }: Prop
           <div class="sso">
             <b>{initialSso ? "Your company sign-in has expired." : "This Redmine is behind a company sign-in."}</b>
             <p>
-              Sign in once in your browser (Pomerium). Redmine Time keeps the session (encrypted) and asks again when it expires.
+              Sign in once in your browser (Pomerium). The session is kept (encrypted) and asked for again when it expires.
             </p>
             <div class="sso-actions">
               <button class="primary" type="button" onClick={browserSignIn} disabled={waiting || !canBrowserSignIn}>
@@ -110,7 +115,7 @@ export function Login({ initialUrl, initialError, initialSso, onSignedIn }: Prop
 
         {error && <div class="error" role="alert">{error}</div>}
 
-        <button class="primary wide" type="submit" disabled={busy || waiting || !url.trim() || !key.trim()}>
+        <button class="primary wide" type="submit" disabled={busy || waiting || !url.trim() || (!key.trim() && !usesSavedKey)}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>

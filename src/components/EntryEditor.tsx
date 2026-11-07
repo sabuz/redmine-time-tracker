@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { chooseActivity } from "../activity";
 import { api, errMsg, type Activity, type Entry, type IssueHit } from "../api";
-import { STEP, clamp, snap } from "../hours";
+import { clamp, snap, stepHint, stepOf } from "../hours";
 import { HoursInput } from "./HoursInput";
 import { IssuePicker } from "./IssuePicker";
 
@@ -16,7 +17,12 @@ interface Props {
   entry?: Entry;
   onSave: (values: SaveValues) => Promise<void>;
   onCancel: () => void;
-  onDelete?: () => Promise<void>;
+  /** Asks to delete this entry. The caller shows the confirmation. */
+  onDelete?: () => void;
+  /** The step time is logged in, in hours; 0 for none (Settings → Time increments). */
+  increment: number;
+  /** Offered when adding an entry on a day the timer can run: with no hours set, the main button starts timing the ticket. */
+  onStartTimer?: (values: SaveValues) => Promise<void>;
 }
 
 function issueOf(entry: Entry): IssueHit {
@@ -30,7 +36,7 @@ function issueOf(entry: Entry): IssueHit {
   };
 }
 
-export function EntryEditor({ entry, onSave, onCancel, onDelete }: Props) {
+export function EntryEditor({ entry, onSave, onCancel, onDelete, onStartTimer, increment }: Props) {
   const [issue, setIssue] = useState<IssueHit | null>(entry ? issueOf(entry) : null);
   const [comments, setComments] = useState(entry?.comments ?? "");
   const [hours, setHours] = useState(entry?.hours ?? 0);
@@ -38,7 +44,6 @@ export function EntryEditor({ entry, onSave, onCancel, onDelete }: Props) {
   const [activityId, setActivityId] = useState<number | undefined>(entry?.activityId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const notes = useRef<HTMLTextAreaElement>(null);
 
   const projectId = issue?.projectId;
@@ -50,7 +55,7 @@ export function EntryEditor({ entry, onSave, onCancel, onDelete }: Props) {
       .then((list) => {
         if (stale) return;
         setActivities(list);
-        setActivityId((current) => current ?? list.find((a) => a.isDefault)?.id ?? list[0]?.id);
+        setActivityId((current) => chooseActivity(list, current, entry?.activityId));
       })
       .catch(() => {}); // the dropdown is optional; Redmine applies its default
     return () => {
@@ -73,24 +78,28 @@ export function EntryEditor({ entry, onSave, onCancel, onDelete }: Props) {
     try {
       await onSave({ issue, hours, comments: comments.trim(), activityId });
     } catch (e) {
-      setError(errMsg(e));
+      setError(stepHint(errMsg(e), hours, increment));
       setBusy(false);
     }
   };
 
-  const remove = async () => {
-    if (!onDelete) return;
+  const startTimer = async () => {
+    if (!issue || !onStartTimer || busy) return;
     setBusy(true);
+    setError("");
     try {
-      await onDelete();
+      await onStartTimer({ issue, hours, comments: comments.trim(), activityId });
     } catch (e) {
       setError(errMsg(e));
       setBusy(false);
-      setConfirmDelete(false);
     }
   };
 
-  const bump = (dir: 1 | -1) => setHours((h) => snap(clamp(h + dir * STEP)));
+  // A new entry with no hours has nothing to add, so the main button tracks time instead.
+  const tracking = !entry && !!onStartTimer && hours <= 0;
+  const primary = () => (tracking ? startTimer() : submit());
+
+  const bump = (dir: 1 | -1) => setHours((h) => snap(clamp(h + dir * stepOf(increment)), increment));
 
   // Show the entry's current activity even if Redmine no longer lists it as active.
   const options =
@@ -103,7 +112,7 @@ export function EntryEditor({ entry, onSave, onCancel, onDelete }: Props) {
       class="editor"
       onKeyDown={(e) => {
         if (e.key === "Escape") onCancel();
-        else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit();
+        else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void primary();
       }}
     >
       {issue ? (
@@ -135,18 +144,18 @@ export function EntryEditor({ entry, onSave, onCancel, onDelete }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
                 e.preventDefault();
-                void submit();
+                void primary();
               }
             }}
           />
 
           <div class="editor-row">
             <div class="stepper">
-              <button type="button" class="icon" aria-label="Subtract 15 minutes" onClick={() => bump(-1)} disabled={hours <= 0}>
+              <button type="button" class="icon" aria-label="Subtract one step" onClick={() => bump(-1)} disabled={hours <= 0}>
                 −
               </button>
-              <HoursInput value={hours} onCommit={setHours} onLive={(h) => setHours(h ?? 0)} class="hours-field" />
-              <button type="button" class="icon" aria-label="Add 15 minutes" onClick={() => bump(1)}>
+              <HoursInput value={hours} onCommit={setHours} onLive={(h) => setHours(h ?? 0)} increment={increment} class="hours-field" />
+              <button type="button" class="icon" aria-label="Add one step" onClick={() => bump(1)}>
                 +
               </button>
             </div>
@@ -168,32 +177,20 @@ export function EntryEditor({ entry, onSave, onCancel, onDelete }: Props) {
 
             <div class="spacer" />
 
-            {onDelete &&
-              (confirmDelete ? (
-                <>
-                  <span class="muted small-text">Delete this entry?</span>
-                  <button type="button" class="danger" onClick={remove} disabled={busy}>
-                    Delete
-                  </button>
-                  <button type="button" class="ghost" onClick={() => setConfirmDelete(false)}>
-                    Keep
-                  </button>
-                </>
-              ) : (
-                <button type="button" class="ghost danger-text" onClick={() => setConfirmDelete(true)} disabled={busy}>
-                  Delete
-                </button>
-              ))}
-            {!confirmDelete && (
-              <>
-                <button type="button" class="ghost" onClick={onCancel}>
-                  Cancel
-                </button>
-                <button type="button" class="primary" onClick={submit} disabled={!canSave}>
-                  {entry ? "Save" : "Add entry"}
-                </button>
-              </>
+            {onDelete && (
+              <button type="button" class="ghost danger-text" onClick={onDelete} disabled={busy}>
+                Delete
+              </button>
             )}
+            <button type="button" class="ghost" onClick={onCancel}>
+              Cancel
+            </button>
+            <button type="button" class="primary with-icon" onClick={primary} disabled={tracking ? busy : !canSave}>
+              {tracking && (
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M4 2.6v10.8a.6.6 0 0 0 .9.5l8.6-5.4a.6.6 0 0 0 0-1L4.9 2.1a.6.6 0 0 0-.9.5Z" /></svg>
+              )}
+              {entry ? "Save" : tracking ? "Start tracking" : "Add time"}
+            </button>
           </div>
         </>
       )}

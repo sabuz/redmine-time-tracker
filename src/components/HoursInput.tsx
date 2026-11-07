@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { MAX_HOURS, STEP, clamp, fmt, parseHours, snap } from "../hours";
+import { MAX_HOURS, clamp, fmt, parseHours, snap, stepOf } from "../hours";
 
 interface Props {
   value: number;
@@ -7,13 +7,15 @@ interface Props {
   onCommit: (hours: number) => void;
   /** Called on every keystroke with the parsed value, or null if unparseable. */
   onLive?: (hours: number | null) => void;
+  /** The step time is logged in, in hours; 0 for none (see hours.ts). */
+  increment: number;
   class?: string;
   label?: string;
 }
 
-/** A text field for hours: accepts "1.5", "1:30", "90m"…, snaps to 0.25, and
+/** A text field for hours: accepts "1.5", "1:30", "90m"…, rounds to the step, and
  *  steps with ↑/↓. Enter commits, Esc reverts. */
-export function HoursInput({ value, onCommit, onLive, class: cls, label }: Props) {
+export function HoursInput({ value, onCommit, onLive, increment, class: cls, label }: Props) {
   const [text, setText] = useState(fmt(value));
   const focused = useRef(false);
   const cancelled = useRef(false);
@@ -29,7 +31,7 @@ export function HoursInput({ value, onCommit, onLive, class: cls, label }: Props
       setText(fmt(value));
       return;
     }
-    const parsed = parseHours(text);
+    const parsed = parseHours(text, increment);
     if (parsed == null || parsed <= 0 || parsed > MAX_HOURS) {
       setText(fmt(value));
       return;
@@ -39,7 +41,7 @@ export function HoursInput({ value, onCommit, onLive, class: cls, label }: Props
   };
 
   const step = (dir: 1 | -1) => {
-    const next = snap(clamp((parseHours(text) ?? value) + dir * STEP));
+    const next = snap(clamp((parseHours(text, increment) ?? value) + dir * stepOf(increment)), increment);
     setText(fmt(next));
     onLive?.(next);
   };
@@ -61,7 +63,7 @@ export function HoursInput({ value, onCommit, onLive, class: cls, label }: Props
       }}
       onInput={(e) => {
         setText(e.currentTarget.value);
-        onLive?.(parseHours(e.currentTarget.value));
+        onLive?.(parseHours(e.currentTarget.value, increment));
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {

@@ -1,54 +1,130 @@
-# Redmine Time
+# Redmine Time Tracker
 
-A small, fast macOS desktop app for logging time to [Redmine](https://www.redmine.org) tickets, in the style of Harvest's weekly timesheet.
+**[Download the latest release](https://github.com/sabuz/redmine-desktop/releases/latest)** for macOS 11 or later, on Intel and Apple silicon Macs.
 
-- Sign in with your Redmine URL and personal API key (stored encrypted, see [How credentials are stored](#how-credentials-are-stored)).
-- Weekly view with a tab per day, a per-day total and a week total.
-- Add an entry on the selected day: search a ticket by number or title, add notes, set hours.
-- Hours go in **0.25 steps**. Type `1.5`, `1:30`, `1h30`, `90m`…, it snaps to the nearest quarter. ↑/↓ step by 0.25.
-- Click the hours on any row to edit them in place; click anywhere else on the row to edit notes/activity or delete it.
-- Time entries are the real Redmine ones, so everything shows up in the web UI too.
+A small Mac app for logging time to [Redmine](https://www.redmine.org). It works like Harvest's weekly timesheet: pick a day, pick a ticket, enter the hours. The entry lands in Redmine like any other time entry, so it shows up in the web UI too.
 
-Not in this phase: start/stop timers.
+It's an independent project, not made by or affiliated with the Redmine team. Changes between versions are in the [changelog](CHANGELOG.md).
 
-## Stack
+## Install
 
-| Layer    | Choice                                                         |
-| -------- | -------------------------------------------------------------- |
-| Shell    | [Tauri 2](https://tauri.app): Rust + the system WebKit (no bundled Chromium, ~4 MB app) |
-| Backend  | Rust: `reqwest` for the Redmine REST API, `chacha20poly1305` for the saved credentials, `tauri-plugin-store` for settings |
-| Frontend | Preact + TypeScript + Vite, plain CSS (light/dark)             |
+Download the `.dmg` from the [latest release](https://github.com/sabuz/redmine-desktop/releases/latest), or build it yourself (see [Development](#development)), then drag the app into Applications. It needs macOS 11 or later and runs on both Intel and Apple silicon Macs.
 
-All HTTP goes through Rust: Redmine sends no CORS headers, and this keeps the API key out of the webview.
+The app isn't signed or notarized yet, so macOS won't open it the first time. Go to System Settings → Privacy & Security and click Open Anyway. On older versions, right-click the app and choose Open. Or, from the Terminal:
 
-## Develop
+```bash
+xattr -dr com.apple.quarantine "/Applications/Redmine Time Tracker.app"
+```
 
-Prerequisites: Xcode Command Line Tools, [Rust](https://rustup.rs), Node 20+.
+## Using it
+
+Sign in with your Redmine address and your API key. You'll find the key in Redmine under My account → API access key → Show. The app stores it encrypted on your Mac (more on that [below](#where-things-are-stored)).
+
+The window shows one week. At the top is a strip with the days and their hours, arrows to change week, and the week's total. Click the date in the title bar to jump back to today. The bar along the bottom has + to add time, refresh, the timer's clock when one is running, Report a bug (it opens this project's issues on GitHub) and Settings (⌘,). In Settings you can sign out, switch between light and dark, and choose which day the week starts on. Help → About shows the version and who made the app.
+
+To add time, select a day, press +, search for a ticket by number or title, add a note if you want one, and set the hours.
+
+To change an entry, right-click it. You can edit it, start a timer on it, or delete it (you'll be asked to confirm). With the keyboard, focus a row and press Enter to edit. A plain click does nothing, so you can't change an entry by accident.
+
+### Which days you can change
+
+You can add time to any day from the 1st of the current month to the end of the current week. Earlier months and future weeks are there to look at, but the + button is disabled and tells you why. Entries from earlier months are read-only. Entries in future weeks can still be edited or deleted.
+
+### Hours
+
+Hours go in quarter-hour steps by default. You can type `1.5`, `1:30`, `1h30` or `90m`, and it rounds to the nearest step, so 25 minutes becomes 0.5. The up and down arrow keys move one step at a time.
+
+Some companies require fixed steps and some don't, and Redmine doesn't tell apps which kind you have. So you choose in Settings → Time increments: none (exact, to 0.01 hours), 15 minutes, 30 minutes or 1 hour. If Redmine rejects an odd value while this is set to none, the error message points you to that setting.
+
+## Timer
+
+The timer is off by default. Turn it on in Settings, and entries for today and earlier days this month get a ▶ button. The + form changes too: pick a ticket and leave the hours at 0, and the button says Start tracking instead of Add time.
+
+How it behaves:
+
+- **Nothing goes to Redmine while it runs.** The app only keeps start and end times on your Mac and writes the time when you stop. A dropped connection can't lose anything, and nobody sees a half-finished entry.
+- **Stopping.** The button on the timer row pauses and resumes. To stop and log, or to throw the timer away, right-click the row.
+- **One timer at a time.** Starting a second one stops and logs the first.
+- **Which day it logs to.** The day you started it from, which has to be today or an earlier day this month. If that day slips into a previous month while the timer is paused (over midnight on the 1st, say), you can't resume it, only stop it, so the time still gets logged.
+- **Rounding.** The total for a ticket and day is rounded up to your increment, so 25 minutes becomes 30 with quarter-hour steps. It doesn't pile up: whatever was rounded up is taken off the next stop on the same ticket and day, so six 10-minute stops come to exactly 1.00 hours, not 1.50. Times you type yourself are rounded to the nearest step instead.
+- **One row per ticket per day.** If the ticket already has an entry for that day, the timer adds to it and appends its notes instead of creating a second row.
+- **It pauses when you stop working.** If there's no keyboard or mouse activity anywhere on the Mac for the idle time you set, the timer pauses, and the idle time isn't counted. It also notices when the Mac went to sleep. macOS gives the app the idle time without any permission prompt. On other systems this isn't available, and Settings says so.
+- **It survives quitting.** The timer is saved as it changes. If the app closes or crashes while it runs, it comes back paused, counted up to the last 15-second check.
+- **A forgotten paused timer gets logged.** After the time you choose (30 minutes by default), the app stops the timer and logs it as if you'd pressed Stop, and shows a message. A timer reopened after days is logged straight away. This never deletes anything: a timer shorter than "Ignore timers shorter than" is left for you to decide. If Redmine refuses (you're offline, or the month is locked), the timer stays, with the error, and isn't tried again until it's paused again or the app restarts.
+
+The timer settings are: pause after 1, 2, 5, 10 or 15 minutes idle, or never (default 5); log a paused timer after 15, 30, 60 or 120 minutes, or never (default 30); ignore timers shorter than 1, 2 or 5 minutes, or keep everything (default 5). Turning the timer off pauses a running one, and its row stays until you stop or discard it.
+
+Stopped timers leave a small record in `timer.json` for 7 days: the stretches you worked, plus how much the rounding gave extra. That's what lets two stops on the same day combine, and what puts a clock icon on the row with the times. After 7 days Redmine is the only record. A timer you haven't stopped is kept until you stop or discard it.
+
+The running time isn't included in the day and week totals. They only show what's already logged.
+
+## What Redmine needs
+
+- An admin has to turn on the REST API: Administration → Settings → API → Enable REST web service.
+- Your role needs the "Log spent time" permission. Editing and deleting entries also needs "Edit own spent time", which the stock Developer role doesn't have. Without it Redmine answers 403 and the app shows that message.
+- If no default activity is set (Administration → Enumerations), new entries use the first activity unless you pick another one in the dropdown.
+- Redmine 3.4 or newer is best, because it can list activities per project. Older versions fall back to the server's default activity.
+
+## Where things are stored
+
+| What | Where | How it's protected |
+| --- | --- | --- |
+| API key and company sign-in token | `secrets.bin` in the app data folder | Encrypted with ChaCha20-Poly1305, using a key derived from this Mac's ID. No password to type and no keychain prompt. Readable only by your user. |
+| Redmine address | `settings.json` | Plain text, not secret |
+| Preferences (appearance, week start, timer settings) | `preferences.json` | Plain text, not secret |
+| Running timer and the last 7 days of stopped ones | `timer.json` | Plain text: ticket numbers, titles and your notes, all of which are in Redmine already. No credentials. |
+
+The app data folder is `~/Library/Application Support/org.redmine-desktop.time`.
+
+The encryption protects against the file leaking on its own: a backup, a synced folder, a copy on another machine, a screenshot. It doesn't protect against other software running as you, which could ask for the same machine ID. If that matters to you, the macOS keychain is stronger, though it prompts for unsigned apps. Signing out deletes the key and the token.
+
+Your API key is only ever sent to your Redmine's own address. If Redmine, or a proxy in front of it, redirects a request to a different site (an identity provider, say), the app doesn't follow it, so the key can't end up there. If the app can't reach Redmine when it starts, the sign-in screen lets you press Sign in again with the saved key, so you don't have to retype it.
+
+## Redmine behind Pomerium
+
+If your Redmine sits behind [Pomerium](https://www.pomerium.com), API calls get redirected to your identity provider (Google, Okta and so on) and never reach Redmine. The app deals with this using Pomerium's [programmatic access](https://pomerium.com/docs/internals/programmatic-access) flow:
+
+1. Enter the address and API key and press Sign in. The app notices the redirect and shows a Sign in with browser button.
+2. Your browser opens your normal company login. When you're done, Pomerium hands a session token to a short-lived listener inside the app, on `localhost`.
+3. The app stores the token encrypted and sends it as `Authorization: Pomerium <token>` along with your API key.
+4. When the token expires, you're taken back to the sign-in screen. Your saved API key is reused, so you only need to sign in with the browser again.
+
+It works whether Pomerium is the proxy itself or sits behind nginx forward-auth (`auth_request`) on a separate host. With forward-auth, nginx has to pass the client's `Authorization` header on to the Pomerium check, which it does by default unless your config strips headers.
+
+It only works if Pomerium's policy for the route lets you in, which it already does if you can open Redmine in a browser. I've tested the flow against a local fake that follows Pomerium's documented endpoints, not against a real Pomerium and identity provider. Other proxies, such as oauth2-proxy or Cloudflare Access, aren't supported. The app will tell you the server didn't offer a Pomerium sign-in.
+
+## Development
+
+It's built with [Tauri 2](https://tauri.app), so the shell and backend are Rust and the window is the system WebKit (no bundled Chromium, which is why the app is only about 4 MB). The interface is Preact and TypeScript with plain CSS. All requests to Redmine go through Rust. Redmine doesn't send CORS headers, and this also keeps the API key out of the web view.
+
+You'll need the Xcode Command Line Tools, [Rust](https://rustup.rs) and Node 20 or newer.
 
 ```bash
 npm install
 npm run tauri dev      # the desktop app, with hot reload
 ```
 
-`npm run dev` alone serves the UI in a normal browser against an in-memory fake backend (`src/mock.ts`), which is handy for UI work without a Redmine instance. Add `?login` to the URL to see the sign-in screen.
+`npm run dev` on its own serves the interface in a normal browser against a fake in-memory backend (`src/mock.ts`). That's handy for working on the UI without a Redmine. A few URL switches show the less common screens: `?login` for sign-in, `?offline` for the screen you get when the Mac had no connection at launch, and `?expired` for an expired company sign-in. Searching for `expired-sso` in the ticket picker makes the sign-in expire mid-session. A browser has no native menu, so to try a menu item, run `window.dispatchEvent(new Event("menu:open-about"))` in the console (or `menu:open-settings`, `menu:sign-out`).
 
 ```bash
-npm test                                # hours parser tests (Node ≥ 22.6)
-cargo test --manifest-path src-tauri/Cargo.toml   # Rust unit tests
-npm run tauri build                     # → src-tauri/target/release/bundle/{macos,dmg}
+npm test                                          # UI logic tests (Node 22.6 or newer)
+cargo test --manifest-path src-tauri/Cargo.toml   # Rust tests
+npm run tauri build                               # builds into src-tauri/target/release/bundle/
 ```
 
-To regenerate icons from `app-icon.png`: `npm run tauri icon app-icon.png`.
+That builds for the Mac you're on. For one app that runs on both Intel and Apple silicon (what the releases use), add the Intel target once with `rustup target add x86_64-apple-darwin`, then run `npm run tauri build -- --target universal-apple-darwin`. The result is in `src-tauri/target/universal-apple-darwin/release/bundle/`.
 
-### Try it against a local Redmine
+To regenerate the icons from `app-icon.png`, run `npm run tauri icon app-icon.png`.
 
-Needs Docker. This starts a disposable Redmine 5 on <http://localhost:3300> with a user (`alex`), a project and four assigned tickets:
+### Trying it against a local Redmine
+
+You need Docker. This starts a throwaway Redmine 5 on <http://localhost:3300>:
 
 ```bash
 docker run -d --name redmine-time-test -p 3300:3000 redmine:5
 ```
 
-Wait ~20 s for it to boot, then seed it. This prints the API key to sign in with:
+Give it about 20 seconds to boot, then seed it with a user (`alex`), a project and four assigned tickets. The last command prints the API key to sign in with:
 
 ```bash
 docker exec redmine-time-test bundle exec rake redmine:load_default_data RAILS_ENV=production REDMINE_LANG=en
@@ -56,59 +132,30 @@ docker cp dev/seed.rb redmine-time-test:/tmp/seed.rb
 docker exec redmine-time-test bundle exec rails runner -e production /tmp/seed.rb 2>&1 | grep "API key"
 ```
 
-The same instance powers the live Rust integration test (creates, edits and deletes an entry):
+The same instance runs the live Rust test, which creates, edits and deletes an entry:
 
 ```bash
 REDMINE_URL=http://localhost:3300 REDMINE_KEY=<key> cargo test --manifest-path src-tauri/Cargo.toml live -- --ignored --nocapture
 ```
 
-Remove it with `docker rm -f redmine-time-test`.
+When you're done, remove it with `docker rm -f redmine-time-test`.
 
-## Redmine requirements
+## What the app asks Redmine
 
-- An admin must enable the REST API: *Administration → Settings → API → Enable REST web service*.
-- Your API key: *My account → API access key → Show*.
-- Your role needs *Log spent time*. Editing and deleting entries also needs *Edit own spent time* (stock "Developer" roles don't have it); without it Redmine answers 403 and the app shows that message.
-- If no default activity is configured (*Administration → Enumerations*), new entries use the first activity unless you pick another in the dropdown.
-- Redmine 3.4+ is recommended (activity lookup per project); older versions fall back to the server-side default activity.
+| What you do | Request |
+| --- | --- |
+| Sign in | `GET /users/current.json` |
+| Open a week | `GET /time_entries.json?user_id=…&from=…&to=…`, then `GET /issues.json?issue_id=…` for the titles |
+| Search tickets | `GET /issues/:id.json` and `GET /issues.json?subject=~…` |
+| Add, edit, delete | `POST`, `PUT` and `DELETE /time_entries/…` |
+| Pick an activity | `GET /projects/:id.json?include=time_entry_activities` and `GET /enumerations/time_entry_activities.json` |
 
-## How credentials are stored
+## License
 
-| What | Where | Protection |
-| --- | --- | --- |
-| API key, company sign-in token | `secrets.bin` in the app data dir | Encrypted (ChaCha20-Poly1305). Key derived from this machine's ID, so there is no password and no OS keychain prompt. File mode 0600 on Unix. |
-| Instance URL | `settings.json` (`tauri-plugin-store`) | Plain JSON, not secret |
-| Week-start preference | `preferences.json` (`tauri-plugin-store`) | Plain JSON, not secret |
-
-The app data dir is `~/Library/Application Support/org.redmine-desktop.time` on macOS.
-
-What this protects against: the file leaking on its own (backups, synced folders, a copy on another machine, a screenshot, `grep`). What it doesn't: other software already running as you, which can ask for the same machine ID. If that is in your threat model, the OS keychain is stronger (at the cost of prompts for unsigned builds). Signing out deletes both secrets.
-
-## Redmine behind Pomerium (company single sign-on)
-
-If your Redmine is served through [Pomerium](https://www.pomerium.com), plain API calls get redirected to your identity provider (Google, Okta…) and never reach Redmine. Redmine Time handles this with Pomerium's [programmatic access](https://pomerium.com/docs/internals/programmatic-access) flow:
-
-1. Enter the URL and API key and press **Sign in**. The app notices the redirect and shows **Sign in with browser**.
-2. Your browser opens your normal company login. When it finishes, Pomerium hands a session token to a short-lived listener on `localhost` inside the app.
-3. The token is stored encrypted and sent as `Authorization: Pomerium <token>` next to your Redmine API key.
-4. When the token expires, the app returns to the sign-in screen (your saved API key is reused) and asks you to sign in with the browser again.
-
-Both layouts are handled: Pomerium as the proxy itself, and nginx forward-auth (`auth_request`) where Pomerium lives on its own host. The app finds that host from the redirect an unauthenticated API request receives. For forward-auth, nginx must pass the client's `Authorization` header on to the Pomerium verify request (nginx does this by default unless the config strips headers).
-
-This only works if Pomerium's policy for the route allows you, which it already does when you can open Redmine in a browser. The flow is tested against a local fake that follows Pomerium's documented endpoints, not against a real Pomerium + identity provider. Other proxies (oauth2-proxy, Cloudflare Access…) are not supported; the app will say the server didn't offer a Pomerium sign-in.
-
-## How it maps to Redmine
-
-| Action                | Endpoint                                                       |
-| --------------------- | -------------------------------------------------------------- |
-| Sign in               | `GET /users/current.json`                                      |
-| Load a week           | `GET /time_entries.json?user_id=…&from=…&to=…` + `GET /issues.json?issue_id=…` for titles |
-| Search tickets        | `GET /issues/:id.json` and `GET /issues.json?subject=~…`       |
-| Create / edit / delete| `POST` / `PUT` / `DELETE /time_entries/…`                      |
-| Activities            | `GET /projects/:id.json?include=time_entry_activities`, `GET /enumerations/time_entry_activities.json` |
+Redmine Time Tracker is released under the [MIT License](LICENSE). The icons and the open source packages it's built on keep their own licenses, listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Roadmap
 
-- Start/stop timers (phase 2)
-- Windows and Linux builds (Tauri already targets them; nothing in the storage layer is OS-specific)
-- Code signing + notarization for distributing the `.dmg`
+- Count idle time back in when you return to a paused timer, and show the running time in the menu bar
+- Windows and Linux builds (Tauri supports them, and nothing in how the app stores data is Mac-specific)
+- Code signing and notarization, so the `.dmg` opens without the warning

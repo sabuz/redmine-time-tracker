@@ -1,3 +1,4 @@
+mod idle;
 mod redmine;
 mod secrets;
 mod sso;
@@ -5,8 +6,8 @@ mod store;
 
 use std::sync::Mutex;
 
-use serde::Serialize;
-use tauri::menu::{Menu, MenuItem, Submenu};
+use serde::{Deserialize, Serialize};
+use tauri::menu::{Menu, MenuItem, MenuItemKind, Submenu, HELP_SUBMENU_ID};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::oneshot;
 
@@ -52,6 +53,8 @@ struct Restore {
     error: Option<String>,
     /// The failure was a proxy asking for a (new) company sign-in.
     sso_required: bool,
+    /// A key is saved for this address, so signing in again doesn't need it typed (it is reused).
+    has_key: bool,
 }
 
 async fn connect(url: &str, key: &str, sso: Option<String>) -> Result<(Session, User)> {
@@ -116,10 +119,11 @@ async fn restore_session(app: AppHandle, state: State<'_, AppState>) -> Result<R
     Ok(match connect(&url, &key, store::load_sso(&url)).await {
         Ok((session, user)) => {
             state.set(Some(session));
-            Restore { url: Some(url.clone()), session: Some(SessionInfo { url, user }), ..Default::default() }
+            Restore { url: Some(url.clone()), session: Some(SessionInfo { url, user }), has_key: true, ..Default::default() }
         }
         Err(error) => Restore {
             url: Some(url),
+            has_key: true,
             sso_required: matches!(error, Error::Sso),
             error: Some(error.to_string()),
             ..Default::default()
@@ -171,6 +175,68 @@ async fn delete_time_entry(state: State<'_, AppState>, id: u64) -> Result<()> {
     state.client()?.client.delete_entry(id).await
 }
 
+/// Seconds since the last keyboard or mouse input anywhere on the system, or `None`
+/// where that can't be read. The timer polls this to pause itself when you walk away.
+#[tauri::command]
+fn idle_seconds() -> Option<f64> {
+    idle::seconds()
+}
+
+/// The addresses the web view can ask to have opened: where "Report a bug" goes (the project's list of issues, to
+/// look before filing) and the author's two profiles from the About popup. They are fixed here, and the web view
+/// only names which one, so it can't ask for any other address to be opened.
+const ISSUES_URL: &str = "https://github.com/sabuz/redmine-desktop/issues";
+const GITHUB_URL: &str = "https://github.com/sabuz";
+const WORDPRESS_URL: &str = "https://profiles.wordpress.org/nazsabuz/";
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Profile {
+    Github,
+    Wordpress,
+}
+
+fn open_page(url: &str) -> Result<()> {
+    open::that_detached(url).map_err(|e| format!("Couldn't open your browser: {e}").into())
+}
+
+#[tauri::command]
+fn report_bug() -> Result<()> {
+    open_page(ISSUES_URL)
+}
+
+#[tauri::command]
+fn open_profile(site: Profile) -> Result<()> {
+    open_page(match site {
+        Profile::Github => GITHUB_URL,
+        Profile::Wordpress => WORDPRESS_URL,
+    })
+}
+
+/// Puts the app's own About item (which opens the popup in the window) into `menu`: in place of the system's
+/// About where there is one, or at the end when `add_if_missing`. Never fails the menu: if anything about it
+/// can't be done the menu simply stays as it was.
+fn own_about(app: &AppHandle, menu: &Submenu<tauri::Wry>, add_if_missing: bool) {
+    let Ok(item) = MenuItem::with_id(app, "open-about", format!("About {}", app.package_info().name), true, None::<&str>) else {
+        return;
+    };
+    let Ok(items) = menu.items() else { return };
+    let system_about = items
+        .iter()
+        .position(|i| matches!(i, MenuItemKind::Predefined(p) if p.text().is_ok_and(|t| t.starts_with("About"))));
+    match system_about {
+        Some(at) => {
+            if menu.remove_at(at).is_ok() {
+                let _ = menu.insert(&item, at);
+            }
+        }
+        None if add_if_missing => {
+            let _ = menu.append(&item);
+        }
+        None => {}
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -180,18 +246,27 @@ pub fn run() {
             store::init(app.handle());
             Ok(())
         })
-        // The standard macOS menus plus Account → Sign Out, so signing out never
+        // The standard macOS menus plus Account → Settings… and Sign Out, so neither
         // depends on finding a control inside the window.
         .menu(|app| {
             let menu = Menu::default(app)?;
+            let settings = MenuItem::with_id(app, "open-settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
             let sign_out = MenuItem::with_id(app, "sign-out", "Sign Out", true, Some("CmdOrCtrl+Shift+O"))?;
-            menu.append(&Submenu::with_items(app, "Account", true, &[&sign_out])?)?;
+            menu.append(&Submenu::with_items(app, "Account", true, &[&settings, &sign_out])?)?;
+            // Help → About and the app menu's About open the same popup, with the author and a link.
+            if let Some(MenuItemKind::Submenu(help)) = menu.get(HELP_SUBMENU_ID) {
+                own_about(app, &help, true);
+            }
+            if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.into_iter().next() {
+                own_about(app, &app_menu, false);
+            }
             Ok(menu)
         })
-        .on_menu_event(|app, event| {
-            if event.id().as_ref() == "sign-out" {
-                let _ = app.emit("sign-out", ());
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            id @ ("sign-out" | "open-settings" | "open-about") => {
+                let _ = app.emit(id, ());
             }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             login,
@@ -204,7 +279,10 @@ pub fn run() {
             create_time_entry,
             update_time_entry,
             delete_time_entry,
+            idle_seconds,
+            report_bug,
+            open_profile,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Redmine Time");
+        .expect("error while running Redmine Time Tracker");
 }

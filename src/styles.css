@@ -1,36 +1,104 @@
+/*
+ * Palette: crimson on warm ink.
+ *   crimson  the header's red: #c62d36 in light, #9e2029 in dark (the middle of the header gradient).
+ *            Filled things use it (--accent): buttons, the selected day, switches.
+ *   red text a lighter tint of the same hue on dark (--accent-text #dd525d), since the header's red is
+ *            too deep to read as text on the dark page. In light mode the two are the same colour.
+ *   ink      #151011   dark mode ground (neutrals lean warm so the red sits naturally)
+ * The header band is --bar-top → --bar; everything on it is white (--bar-fg).
+ */
 :root {
   --bg: #ffffff;
-  --bg-soft: #f5f5f7;
-  --bg-hover: #f0f0f3;
-  --fg: #1d1d1f;
-  --muted: #86868b;
-  --faint: #b0b0b6;
-  --line: #e6e6ea;
-  --accent: #c8372d;
-  --accent-hover: #b02e25;
-  --accent-soft: rgba(200, 55, 45, 0.1);
+  --bg-soft: #f8f5f5;
+  --bg-hover: #f2eeee;
+  --fg: #1f1a1b;
+  --muted: #82777a;
+  --faint: #b3a9ab;
+  --line: #ece6e7;
+  --border: #d3cdce; /* controls that are outlined, like the footer buttons */
+  /* One red. Fills (buttons, the selected day, switches) use --accent, which is the header's red;
+     red text and outlines use --accent-text, the same hue, lightened on dark so it stays readable. */
+  --accent: #c62d36;
+  --accent-text: #c62d36;
+  --accent-hover: #a9232c;
+  --accent-soft: rgba(198, 45, 54, 0.1);
+  --accent-edge: #a9232c;
+  --accent-line: rgba(198, 45, 54, 0.35);
   --accent-fg: #ffffff;
-  --danger: #c8372d;
+  --danger: #c62d36;
+  --bar-top: #d0353d;
+  --bar: #bb2831;
+  --bar-fg: #ffffff;
+  --bar-hover: rgba(255, 255, 255, 0.16);
+  --bar-edge: rgba(80, 0, 8, 0.28);
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.06);
   --radius: 10px;
+  /* Type scale (compact window). Change these to retune every size in the app. */
+  --fs-2xs: 10px; /* weekday labels */
+  --fs-xs: 11px; /* notes, hints, hours under a day, status lines */
+  --fs-sm: 12px; /* clock chip, selects, toasts, errors */
+  --fs-base: 13px; /* body text, buttons, inputs */
+  --fs-md: 14px; /* hours, day numbers */
+  --fs-lg: 16px; /* running clock, dialog title */
+  --fs-total: 18px; /* the week total */
+  /* Control sizes (compact window). Change these to retune the buttons. */
+  --ctl-lg: 30px; /* footer buttons */
+  --ctl-md: 26px; /* icon buttons, the start / pause button of the timer */
+  --ctl-sm: 22px; /* small icon buttons */
+  --fs-xl: 20px; /* sign-in title */
   color-scheme: light dark;
 }
 
+/* Dark tokens. They appear twice on purpose: once for "System" when the OS is dark, and once
+   for an explicit Dark; CSS can't share one rule between a media query and an attribute.
+   Keep the two lists identical. "System" never sets data-theme, so it needs no script. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1c1c1e;
-    --bg-soft: #2a2a2d;
-    --bg-hover: #303034;
-    --fg: #f2f2f5;
-    --muted: #98989f;
-    --faint: #66666c;
-    --line: #38383c;
-    --accent: #ec5d52;
-    --accent-hover: #f0766c;
-    --accent-soft: rgba(236, 93, 82, 0.16);
-    --danger: #ff6b60;
-    --shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  :root:not([data-theme="light"]) {
+    --bg: #151011;
+    --bg-soft: #1f1819;
+    --bg-hover: #271e20;
+    --fg: #f5eff0;
+    --muted: #a69b9e;
+    --faint: #6f6568;
+    --line: #32282a;
+    --border: #4d4145;
+    --accent: #9e2029; /* the middle of the header's gradient */
+    --accent-text: #dd525d;
+    --accent-hover: #b3252f;
+    --accent-soft: rgba(221, 82, 93, 0.16);
+    --accent-edge: #b8323d;
+    --accent-line: rgba(221, 82, 93, 0.4);
+    --danger: #dd525d;
+    --bar-top: #a92530;
+    --bar: #931c27;
+    --bar-edge: rgba(0, 0, 0, 0.45);
+    --shadow: 0 8px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
+}
+:root[data-theme="dark"] {
+  --bg: #151011;
+  --bg-soft: #1f1819;
+  --bg-hover: #271e20;
+  --fg: #f5eff0;
+  --muted: #a69b9e;
+  --faint: #6f6568;
+  --line: #32282a;
+  --border: #4d4145;
+  --accent: #9e2029; /* the middle of the header's gradient */
+  --accent-text: #dd525d;
+  --accent-hover: #b3252f;
+  --accent-soft: rgba(221, 82, 93, 0.16);
+  --accent-edge: #b8323d;
+  --accent-line: rgba(221, 82, 93, 0.4);
+  --danger: #dd525d;
+  --bar-top: #a92530;
+  --bar: #931c27;
+  --bar-edge: rgba(0, 0, 0, 0.45);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
 }
 
 * {
@@ -43,11 +111,18 @@ body,
   height: 100%;
   margin: 0;
 }
+/* This is an app window, not a page: the window itself never scrolls or rubber-bands. Only the
+   lists inside it (the day's entries, the ticket picker, a long dialog) scroll. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
 
 body {
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font: var(--fs-base)/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   cursor: default;
   user-select: none;
@@ -72,6 +147,7 @@ select {
 button {
   cursor: pointer;
   border: 0;
+  padding: 0; /* the default 1px 6px overflowed narrow icon buttons and pushed their icons off-centre */
   background: none;
 }
 
@@ -81,7 +157,7 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-text);
   outline-offset: 1px;
 }
 
@@ -92,7 +168,7 @@ button:disabled {
   color: var(--faint);
 }
 .small-text {
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 .spacer {
   flex: 1;
@@ -109,9 +185,10 @@ button.primary,
 button.danger {
   background: var(--accent);
   color: var(--accent-fg);
-  padding: 6px 14px;
-  border-radius: 8px;
+  padding: 5px 12px;
+  border-radius: 7px;
   font-weight: 600;
+  line-height: 18px;
 }
 button.primary:hover:not(:disabled),
 button.danger:hover:not(:disabled) {
@@ -119,11 +196,12 @@ button.danger:hover:not(:disabled) {
 }
 button.primary.wide {
   width: 100%;
-  padding: 9px 14px;
+  padding: 8px 14px;
 }
 button.ghost {
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 5px 9px;
+  line-height: 18px;
+  border-radius: 7px;
   color: var(--muted);
   font-weight: 500;
 }
@@ -131,17 +209,27 @@ button.ghost:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--fg);
 }
+button.outline {
+  padding: 4px 10px;
+  line-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-weight: 500;
+}
+button.outline:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
 button.danger-text {
   color: var(--danger);
 }
 button.icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: var(--ctl-md);
+  height: var(--ctl-md);
+  border-radius: 6px;
   display: inline-grid;
   place-items: center;
   color: var(--muted);
-  font-size: 16px;
+  font-size: var(--fs-md);
   line-height: 1;
 }
 button.icon:hover:not(:disabled) {
@@ -149,11 +237,11 @@ button.icon:hover:not(:disabled) {
   color: var(--fg);
 }
 button.icon.small {
-  width: 22px;
-  height: 22px;
-  font-size: 11px;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  font-size: var(--fs-2xs);
 }
-button.icon.spin svg {
+button.spin svg {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin {
@@ -187,6 +275,7 @@ button.icon.spin svg {
   gap: 12px;
 }
 .logo {
+  align-self: center; /* the logo and the heading above the form are centred; the form itself is full width */
   width: 48px;
   height: 48px;
   border-radius: 12px;
@@ -197,23 +286,25 @@ button.icon.spin svg {
 }
 .login h1 {
   margin: 4px 0 0;
-  font-size: 22px;
+  text-align: center;
+  font-size: var(--fs-xl);
   letter-spacing: -0.01em;
 }
 .login .sub {
   margin: -6px 0 6px;
+  text-align: center;
   color: var(--muted);
 }
 .login label {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--muted);
 }
 .login input {
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 400;
   color: var(--fg);
   padding: 8px 10px;
@@ -223,12 +314,12 @@ button.icon.spin svg {
 }
 .login input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .hint {
   margin: -2px 0 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted);
 }
 .error {
@@ -236,7 +327,7 @@ button.icon.spin svg {
   color: var(--danger);
   border-radius: 8px;
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .sso {
   display: flex;
@@ -246,7 +337,7 @@ button.icon.spin svg {
   border: 1px solid var(--line);
   background: var(--bg-soft);
   border-radius: 10px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .sso p {
   margin: 0;
@@ -270,97 +361,47 @@ button.icon.spin svg {
   flex-direction: column;
 }
 
+/* The header is a slim red band holding just the date, centred. The window's own buttons sit at its
+   left. Their vertical position is trafficLightPosition.y in tauri.conf.json: on this macOS the button
+   centres land 2pt above y (the system title bar is 32pt tall), so y = half this height + 2 = 18. */
 .topbar {
   flex: none;
-  height: 44px;
-  padding: 8px 14px 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-}
-.tauri .topbar {
-  padding-left: 82px; /* the traffic lights sit at x=14, like the gutter */
-}
-.topbar > * {
-  align-self: flex-start;
-}
-.nav {
+  height: 32px;
+  padding: 0 82px; /* clear of the window buttons on both sides, so the title stays centred */
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  color: var(--bar-fg);
+  background: linear-gradient(180deg, var(--bar-top), var(--bar));
+  box-shadow: 0 1px 0 var(--bar-edge);
 }
-.range {
-  min-width: 128px;
-  text-align: center;
+button.today-title {
+  position: relative;
+  padding: 3px 10px;
+  border-radius: 7px;
+  color: var(--bar-fg);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
-
-.account {
-  height: 28px;
-  padding: 0 8px 0 3px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-weight: 500;
+button.today-title:hover {
+  background: var(--bar-hover);
 }
-.account:hover,
-.account[aria-expanded="true"] {
-  background: var(--bg-hover);
-  color: var(--fg);
+button.today-title:focus-visible {
+  outline-color: var(--bar-fg);
 }
 .avatar {
-  width: 22px;
-  height: 22px;
+  flex: none;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
-  font-size: 12px;
-}
-.account-name {
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.menu-wrap {
-  position: relative;
-}
-.menu {
-  position: absolute;
-  right: 0;
-  top: 34px;
-  z-index: 20;
-  width: 240px;
-  background: var(--bg);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 6px;
-}
-.menu-user {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 10px 10px;
-  border-bottom: 1px solid var(--line);
-  overflow: hidden;
-}
-.menu-user .muted {
-  font-size: 12px;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.menu-group {
-  padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-base);
 }
 .segmented {
   display: flex;
@@ -372,7 +413,7 @@ button.icon.spin svg {
   flex: 1;
   padding: 4px 0;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted);
 }
 .segmented button.on {
@@ -381,83 +422,100 @@ button.icon.spin svg {
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
-.menu-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  margin-top: 4px;
-  border-radius: 6px;
-}
-.menu-item:hover {
-  background: var(--accent);
-  color: var(--accent-fg);
-}
-
 /* ---------- day tabs ---------- */
 
-.days {
+.weekbar {
   flex: none;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 4px;
-  padding: 6px 14px 0;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
+}
+.days {
+  flex: 7 1 0;
+  min-width: 0;
+  display: flex;
+  gap: 2px;
+}
+/* Previous / next week, either side of the days. */
+button.icon.step {
+  flex: none;
+  width: 22px;
+  height: 30px;
 }
 .day,
 .week-total {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 8px 4px 9px;
-  border-radius: 8px 8px 0 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  min-width: 0;
-}
-.day:hover {
-  background: var(--bg-hover);
-}
-.day.on {
-  border-bottom-color: var(--accent);
+  gap: 3px;
+  padding: 2px 0;
+  border-radius: 10px;
 }
 .dow {
-  font-size: 12px;
+  line-height: 14px;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-weight: 500;
 }
 .day.weekend .dow {
   color: var(--faint);
 }
 .day.today .dow {
-  color: var(--accent);
-  font-weight: 700;
+  color: var(--accent-text);
 }
-.day.on .dow {
-  color: var(--fg);
-}
-.day.on.today .dow {
-  color: var(--accent);
-}
-.sum {
-  font-size: 15px;
+.num {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: var(--fs-md);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.day.empty .sum {
+.day:hover:not(.on) .num {
+  background: var(--bg-hover);
+}
+.day.today .num {
+  color: var(--accent-text);
+}
+.day.on .num {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.hrs {
+  line-height: 14px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.day.empty .hrs {
   color: var(--faint);
 }
 .week-total {
   flex: 1.15;
+  align-self: stretch; /* so the divider spans the whole strip */
+  justify-content: center;
+  gap: 1px;
   margin-left: 8px;
   border-left: 1px solid var(--line);
   border-radius: 0;
   cursor: default;
 }
-.week-total .sum {
-  color: var(--accent);
+/* The figure is not a day circle: it sits right between its label and "hours", and is the biggest number here. */
+.week-total .num {
+  width: auto;
+  height: auto;
+  font-size: var(--fs-total);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--accent-text);
 }
 
 /* ---------- day panel ---------- */
@@ -465,40 +523,62 @@ button.icon.spin svg {
 .day-panel {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 6px 32px; /* rows add 8px, so text lines up with the 14px gutter */
+  overscroll-behavior: contain;
+  padding: 8px 6px 16px; /* rows add 8px, so text lines up with the 14px gutter */
 }
-.day-head {
+.day-note {
+  margin: 0 8px 8px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  padding: 0 8px;
+  gap: 8px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
 }
-.day-head h2 {
-  margin: 0;
-  font-size: 18px;
-  letter-spacing: -0.01em;
-}
-.day-total {
-  color: var(--muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-.day-total b {
-  color: var(--fg);
-}
-.add {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-fg);
+.add,
+button.tool {
+  box-shadow: none;
+  flex: none;
+  width: var(--ctl-lg);
+  height: var(--ctl-lg);
+  border-radius: 7px;
   display: grid;
   place-items: center;
-  box-shadow: 0 2px 6px rgba(200, 55, 45, 0.35);
+}
+.add {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border: 1px solid var(--accent-edge);
 }
 .add:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+button.tool {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+button.tool:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+/* A footer button with a text label beside its icon (like Harvest's "Share feedback"). */
+button.tool.labelled {
+  width: auto;
+  padding: 0 10px 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .entries {
@@ -507,12 +587,12 @@ button.icon.spin svg {
   padding: 0;
 }
 
+/* Rows are flat: a corner radius curls the separator lines at the ends. Only the editor is rounded. */
 .row {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 10px 8px;
-  border-radius: var(--radius);
   border-bottom: 1px solid var(--line);
 }
 .row:last-child {
@@ -520,6 +600,10 @@ button.icon.spin svg {
 }
 .row:hover {
   background: var(--bg-soft);
+}
+/* Read-only rows don't react to the pointer. */
+.row.locked:hover {
+  background: none;
 }
 .row-main {
   flex: 1;
@@ -533,8 +617,8 @@ button.icon.spin svg {
 }
 .row-note {
   margin-top: 1px;
-  font-size: 12px;
-  font-weight: 300;
+  font-size: var(--fs-xs);
+  font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -549,19 +633,20 @@ input.hours {
   border-radius: 7px;
   padding: 4px 8px;
 }
-input.row-hours {
-  margin-right: -8px; /* the digits, not the field's padding, sit on the gutter */
-  width: 72px;
-  font-size: 16px;
+/* The hours on a row are read-only; they are changed in the editor. */
+.row-hours {
+  min-width: 56px;
+  text-align: right;
+  font-size: var(--fs-md);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-.row:hover input.row-hours {
-  border-color: var(--line);
-  background: var(--bg);
+.row.menu-open {
+  background: var(--bg-soft);
 }
 input.hours:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   background: var(--bg);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
@@ -579,13 +664,13 @@ input.hours:focus {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  margin: 4px 8px 8px;
+  margin: 4px 0 8px;
   background: var(--bg-soft);
   border-radius: 12px;
   border: 1px solid var(--line);
 }
 li.editing {
-  margin: 4px 8px;
+  margin: 4px 0;
 }
 li.editing .editor {
   margin: 0;
@@ -615,12 +700,12 @@ li.editing .editor {
 .chip-project {
   color: var(--muted);
   font-weight: 400;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 textarea.notes,
 .picker-input,
 select.activity {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -636,25 +721,28 @@ textarea.notes:focus,
 .picker-input:focus,
 select.activity:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: var(--accent-text);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 select.activity {
   width: auto;
   max-width: 170px;
-  padding: 5px 8px;
+  height: 28px;
+  padding: 0 8px;
 }
 .stepper {
   display: flex;
   align-items: center;
+  height: 28px;
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 1px;
 }
 input.hours-field {
   width: 64px;
-  font-size: 15px;
+  height: 26px;
+  padding: 0 8px;
+  font-size: var(--fs-md);
   font-weight: 600;
   text-align: center;
 }
@@ -667,6 +755,7 @@ input.hours-field {
   padding: 0;
   max-height: 252px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 8px;
 }
 .picker-list li {
@@ -690,16 +779,396 @@ input.hours-field {
   font-weight: 500;
 }
 .picker-meta {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .picker-status {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--muted);
   padding: 8px 10px 2px;
+}
+
+/* ---------- timer ---------- */
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 2px;
+  border-radius: 50%;
+  background: var(--accent-text);
+  vertical-align: 1px;
+  flex: none;
+}
+.running .live-dot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.paused .live-dot {
+  background: var(--faint);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .running .live-dot {
+    animation: none;
+  }
+}
+
+.pill {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent-text);
+}
+.pill.paused {
+  background: var(--bg-soft);
+  border-color: var(--border);
+  color: var(--muted);
+}
+.pill:hover {
+  filter: brightness(0.96);
+}
+.pill .live-dot {
+  margin: 0;
+}
+.pill-id,
+.pill-day {
+  font-weight: 500;
+  opacity: 0.75;
+}
+.pill-day {
+  padding-left: 7px;
+  border-left: 1px solid currentColor;
+  border-left-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+.timer-row {
+  background: var(--accent-soft);
+}
+.timer-row:hover {
+  background: var(--accent-soft);
+}
+.timer-row.paused {
+  background: var(--bg-soft);
+}
+.timer-row .row-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+input.timer-notes {
+  display: block;
+  width: 100%;
+  margin-top: 1px;
+  padding: 1px 0;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  color: var(--fg);
+  user-select: text;
+}
+input.timer-notes::placeholder {
+  color: var(--faint);
+}
+input.timer-notes:focus {
+  outline: none;
+  border-bottom-color: var(--accent-text);
+}
+.timer-status {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.timer-clock {
+  min-width: 56px;
+  text-align: right;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+button.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* Always there, so the timer can be found; stronger once the row is pointed at. */
+/* The timer's buttons share one bordered style and one column at the end of a row: the start
+   button on an entry, and pause/resume on the running timer. The time sits just before it. */
+button.toggle,
+.toggle-slot {
+  flex: none;
+  width: var(--ctl-md);
+  height: var(--ctl-md);
+  margin-left: -8px; /* close to the time it follows */
+}
+button.toggle {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+button.toggle.play {
+  color: var(--accent-text);
+}
+button.toggle:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.timed {
+  display: inline-flex;
+  margin-left: 6px;
+  color: var(--faint);
+  vertical-align: -1px;
+}
+
+/* ---------- right-click menu ---------- */
+
+.ctx {
+  position: fixed;
+  z-index: 40;
+  min-width: 170px;
+  padding: 5px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.ctx button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.ctx button:hover,
+.ctx button:focus-visible {
+  outline: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+.ctx button.danger-item {
+  color: var(--danger);
+}
+.ctx button.danger-item:hover,
+.ctx button.danger-item:focus-visible {
+  background: var(--danger);
+  color: var(--accent-fg);
+}
+
+/* ---------- settings dialog ---------- */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.32);
+}
+.dialog {
+  width: min(440px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--bg);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 8px 20px 0;
+}
+.dialog:focus {
+  outline: none;
+}
+.dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 2px;
+}
+.dialog-head h2 {
+  margin: 0;
+  font-size: var(--fs-lg);
+  letter-spacing: -0.01em;
+}
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.setting.account-setting {
+  justify-content: flex-start;
+  gap: 12px;
+}
+.account-setting .setting-text {
+  flex: 1;
+}
+/* The timer's options only exist while the timer is on, so they need no bracket; just a small indent. */
+.setting.sub {
+  padding-left: 14px;
+}
+.setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.setting .segmented {
+  width: 150px;
+  flex: none;
+}
+.setting .segmented.three {
+  width: 190px;
+}
+select.choice {
+  flex: none;
+  width: 150px;
+  font-size: var(--fs-sm);
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+select.choice:focus {
+  outline: none;
+  border-color: var(--accent-text);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.switch {
+  flex: none;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--line);
+  position: relative;
+  transition: background 0.15s;
+}
+.switch.on {
+  background: var(--accent);
+}
+.switch .knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+.switch.on .knob {
+  transform: translateX(16px);
+}
+/* A smaller dialog that asks one question. */
+.dialog.confirm {
+  width: min(340px, 100%);
+  padding: 18px 20px 16px;
+}
+.confirm h2 {
+  margin: 0 0 8px;
+  font-size: var(--fs-lg);
+  letter-spacing: -0.01em;
+}
+.confirm-body {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.confirm-body b {
+  color: var(--fg);
+  font-weight: 600;
+}
+.confirm .error {
+  margin-top: 10px;
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+/* The About popup: small and centred. */
+.dialog.about {
+  position: relative; /* the cross sits in its top right corner */
+  width: min(320px, 100%);
+  padding: 32px 20px; /* the same above and below, so the content sits in the middle */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.about .developed {
+  font-size: var(--fs-xs);
+}
+.about .author {
+  margin-top: 4px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.about .social {
+  display: flex;
+  gap: 0; /* each icon still has a 30px click area around it */
+  margin-top: 2px;
+}
+/* Just the icon: no box. The button keeps a comfortable click area, and the icon darkens on hover. */
+button.icon-link {
+  width: var(--ctl-lg);
+  height: var(--ctl-lg);
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--muted);
+}
+button.icon-link:hover {
+  color: var(--fg);
+}
+.about .about-version {
+  margin-top: 12px;
+}
+.about .error {
+  margin-top: 10px;
+  width: 100%;
+}
+.about .dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+/* The Save row stays at the bottom of the dialog however tall the settings get; they scroll beneath it. */
+.dialog-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 14px;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+.dialog > .setting:last-of-type {
+  border-bottom: 0; /* the footer's own line separates it */
 }
 
 /* ---------- toast ---------- */
@@ -707,7 +1176,7 @@ input.hours-field {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 20px;
+  bottom: 68px; /* above the footer */
   transform: translateX(-50%);
   max-width: min(520px, calc(100% - 32px));
   background: var(--fg);
@@ -715,5 +1184,5 @@ input.hours-field {
   padding: 10px 14px;
   border-radius: 10px;
   box-shadow: var(--shadow);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }

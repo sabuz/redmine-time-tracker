@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface User {
@@ -17,6 +18,8 @@ export interface Restore {
   error?: string;
   /** A proxy in front of Redmine (Pomerium) wants a company sign-in. */
   ssoRequired?: boolean;
+  /** A key is saved for this address, so signing in again doesn't need it typed. */
+  hasKey?: boolean;
 }
 
 export interface Entry {
@@ -62,6 +65,8 @@ export interface EntryPatch {
   activityId?: number;
 }
 
+export type ProfileSite = "github" | "wordpress";
+
 const inTauri = "__TAURI_INTERNALS__" in window;
 
 /** Commands are implemented in Rust (src-tauri). In a plain browser during
@@ -105,4 +110,12 @@ export const api = {
   createEntry: (input: NewEntry) => call<Entry>("create_time_entry", { input }),
   updateEntry: (id: number, patch: EntryPatch) => call<Entry>("update_time_entry", { id, ...patch }),
   deleteEntry: (id: number) => call<void>("delete_time_entry", { id }),
+  /** Seconds since the last keyboard or mouse input anywhere on this Mac; null where it can't be read. */
+  idleSeconds: () => call<number | null>("idle_seconds"),
+  /** Opens the project's list of GitHub issues in the browser. */
+  reportBug: () => call<void>("report_bug"),
+  /** Opens one of the author's profiles in the browser (the About popup). The address is fixed in Rust. */
+  openProfile: (site: ProfileSite) => call<void>("open_profile", { site }),
+  /** The app's version, or "dev" when the UI runs in a plain browser. */
+  version: (): Promise<string> => (inTauri ? getVersion() : Promise.resolve("dev")),
 };

@@ -19,15 +19,28 @@ export const startOfWeek = (d: Date, weekStart: WeekStart): Date => addDays(d, -
 
 export const weekDays = (start: Date): Date[] => Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
+/**
+ * The days new time can be added to: from the first of the current month to the end of the
+ * current week. Earlier months are closed, and so are the weeks still to come.
+ */
+export function loggableRange(today: string, weekStart: WeekStart): { from: string; to: string } {
+  const t = parseIso(today);
+  return {
+    from: iso(new Date(t.getFullYear(), t.getMonth(), 1)),
+    to: iso(addDays(startOfWeek(t, weekStart), 6)),
+  };
+}
+
+export function canLogOn(date: string, today: string, weekStart: WeekStart): boolean {
+  const { from, to } = loggableRange(today, weekStart);
+  return date >= from && date <= to;
+}
+
 const fmt = (opts: Intl.DateTimeFormatOptions) => (d: Date) => d.toLocaleDateString(undefined, opts);
 
 export const weekdayShort = fmt({ weekday: "short" });
 export const dayLong = fmt({ weekday: "long", day: "numeric", month: "long" });
-const monthDay = fmt({ month: "short", day: "numeric" });
+export const monthDay = fmt({ month: "short", day: "numeric" });
 
-/** "Nov 1 – 7, 2026" or "Oct 26 – Nov 1, 2026". */
-export function weekRange(start: Date): string {
-  const end = addDays(start, 6);
-  const endPart = start.getMonth() === end.getMonth() ? String(end.getDate()) : monthDay(end);
-  return `${monthDay(start)} – ${endPart}, ${end.getFullYear()}`;
-}
+/** Entries can be edited or deleted from the first of the current month on; earlier months are read-only. */
+export const canChangeOn = (date: string, today: string): boolean => date >= `${today.slice(0, 7)}-01`;

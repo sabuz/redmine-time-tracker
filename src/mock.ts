@@ -50,6 +50,29 @@ const entries: Entry[] = [
   };
 });
 
+// Two entries on the last days of the previous month, to try the read-only rule on.
+{
+  const now = new Date();
+  for (const [back, issueId, hours, comments] of [
+    [0, 1042, 3.5, "Investigated the session timeout"],
+    [1, 1063, 2, "Rails upgrade spike"],
+  ] as const) {
+    const issue = issues.find((i) => i.id === issueId)!;
+    entries.push({
+      id: nextId++,
+      issueId: issue.id,
+      issueSubject: issue.subject,
+      projectId: issue.projectId,
+      projectName: issue.projectName,
+      activityId: 9,
+      activityName: "Development",
+      hours,
+      comments,
+      spentOn: iso(new Date(now.getFullYear(), now.getMonth(), -back)), // day 0 = the last day of last month
+    });
+  }
+}
+
 const session: SessionInfo = { url: "https://redmine.example.com", user: { id: 1, login: "alex", name: "Alex Rivera" } };
 
 export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -61,10 +84,14 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
   switch (cmd) {
     case "restore_session": {
       const q = new URLSearchParams(location.search);
-      if (q.has("expired")) return { url: session.url, ssoRequired: true, error: "sso" } satisfies Restore;
-      return (q.has("login") ? { url: session.url } : { url: session.url, session }) satisfies Restore;
+      if (q.has("expired")) return { url: session.url, ssoRequired: true, hasKey: true, error: "sso" } satisfies Restore;
+      // `?offline`: the Mac had no connection at launch. A key is saved, so one click on Sign in retries.
+      if (q.has("offline")) return { url: session.url, hasKey: true, error: `Can't connect to ${session.url} (dns error).` } satisfies Restore;
+      return (q.has("login") ? { url: session.url } : { url: session.url, session, hasKey: true }) satisfies Restore;
     }
     case "login":
+      // Like the backend: a blank key reuses the saved one, and there is none after `?login`.
+      if (!args.apiKey && new URLSearchParams(location.search).has("login")) throw { kind: "error", message: "Enter your API key." };
       if (args.apiKey === "bad") throw { kind: "error", message: "Redmine rejected the API key. Check the key, and that the REST API is enabled (Administration → Settings → API)." };
       // A URL containing "sso" behaves like a Redmine behind Pomerium.
       if (String(args.url).includes("sso") && !args.sso) throw { kind: "sso", message: "Your company sign-in (Pomerium) is needed or has expired." };
@@ -77,6 +104,8 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
       return entries.filter((e) => e.spentOn >= (args.from as string) && e.spentOn <= (args.to as string)).map((e) => ({ ...e }));
     case "search_issues": {
       const q = String(args.query).trim().replace(/^#/, "").toLowerCase();
+      // Searching for "expired-sso" behaves like the company sign-in expiring in the middle of a session.
+      if (q === "expired-sso") throw { kind: "sso", message: "Your company sign-in (Pomerium) is needed or has expired." };
       if (!q) return issues.slice(0, 4);
       return issues.filter((i) => String(i.id).includes(q) || i.subject.toLowerCase().includes(q));
     }
@@ -94,7 +123,7 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
         projectName: issue.projectName,
         activityId: activity.id,
         activityName: activity.name,
-        hours: Math.round(input.hours * 4) / 4,
+        hours: Math.round(input.hours * 100) / 100,
         comments: input.comments,
         spentOn: input.spentOn,
       };
@@ -103,7 +132,7 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
     }
     case "update_time_entry": {
       const e = entries.find((x) => x.id === args.id)!;
-      if (typeof args.hours === "number") e.hours = Math.round(args.hours * 4) / 4;
+      if (typeof args.hours === "number") e.hours = Math.round(args.hours * 100) / 100;
       if (typeof args.comments === "string") e.comments = args.comments;
       if (typeof args.activityId === "number") {
         e.activityId = args.activityId;
@@ -113,6 +142,15 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
     }
     case "delete_time_entry":
       entries.splice(entries.findIndex((x) => x.id === args.id), 1);
+      return null;
+    case "idle_seconds":
+      // Set `window.__idle = 150` in the console to pretend nobody has touched the machine for 150 s.
+      return (window as unknown as { __idle?: number }).__idle ?? 0;
+    case "report_bug":
+      window.open("https://github.com/sabuz/redmine-desktop/issues", "_blank", "noopener");
+      return null;
+    case "open_profile":
+      window.open(args.site === "wordpress" ? "https://profiles.wordpress.org/nazsabuz/" : "https://github.com/sabuz", "_blank", "noopener");
       return null;
     default:
       throw `Unknown command ${cmd}`;
