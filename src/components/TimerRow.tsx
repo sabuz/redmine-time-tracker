@@ -21,10 +21,6 @@ function pausedText(t: TimerState): string {
   if (!p) return "";
   const at = timeOfDay(p.at);
   switch (p.reason) {
-    case "idle":
-      return `Paused: no keyboard or mouse activity since ${at}`;
-    case "asleep":
-      return `Paused: your Mac was asleep after ${at}`;
     case "closed":
       return `Paused: the app was closed at ${at}`;
     default:

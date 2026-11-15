@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { chooseActivity } from "../activity";
 import { api, errMsg, type Activity, type Entry, type IssueHit } from "../api";
-import { clamp, snap, stepHint, stepOf } from "../hours";
+import { clamp, snap, stepOf } from "../hours";
 import { HoursInput } from "./HoursInput";
 import { IssuePicker } from "./IssuePicker";
 
@@ -78,7 +78,7 @@ export function EntryEditor({ entry, onSave, onCancel, onDelete, onStartTimer, i
     try {
       await onSave({ issue, hours, comments: comments.trim(), activityId });
     } catch (e) {
-      setError(stepHint(errMsg(e), hours, increment));
+      setError(errMsg(e));
       setBusy(false);
     }
   };

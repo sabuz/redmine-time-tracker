@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, type User } from "../api";
-import { AUTOLOG_CHOICES, IDLE_CHOICES, INCREMENT_CHOICES, MIN_SESSION_CHOICES, THEMES, type Prefs, type Theme } from "../settings";
+import { AUTOLOG_CHOICES, MIN_SESSION_CHOICES, THEMES, type Prefs, type Theme } from "../settings";
 
 interface Props {
   prefs: Prefs;
@@ -16,17 +16,16 @@ const minutes = (n: number) => (n === 1 ? "1 minute" : `${n} minutes`);
 
 const THEME_LABEL: Record<Theme, string> = { system: "System", light: "Light", dark: "Dark" };
 
-const INCREMENT_LABEL: Record<number, string> = { 0: "None (exact)", 0.25: "15 min (0.25 h)", 0.5: "30 min (0.5 h)", 1: "1 hour" };
+const INCREMENT_LABEL: Record<number, string> = { 0: "None (exact)", 0.25: "15 min (0.25 h)" };
+
+const logAfterLabel = (n: number) => (n === 0 ? "After the timer is stopped" : n === 60 ? "1 hour" : `${n / 60} hours`);
 
 export function Settings({ prefs, onChange, user, host, onSignOut, onClose }: Props) {
   const dialog = useRef<HTMLDivElement>(null);
-  // Whether this system can report keyboard and mouse activity (macOS can).
-  const [idleKnown, setIdleKnown] = useState(true);
   const [version, setVersion] = useState("");
 
   useEffect(() => {
     dialog.current?.focus();
-    api.idleSeconds().then((v) => setIdleKnown(v !== null)).catch(() => setIdleKnown(false));
     api.version().then(setVersion).catch(() => {});
   }, []);
 
@@ -74,20 +73,25 @@ export function Settings({ prefs, onChange, user, host, onSignOut, onClose }: Pr
           <div class="setting-text">
             <b>Time increments</b>
             <span class="muted small-text">
-              If your company requires fixed steps. Redmine can't tell apps, so choose it here.
+              {prefs.increment > 0
+                ? "Your Redmine only accepts fixed steps, so this was set for you. You can go back to none; it is set again if Redmine refuses a time."
+                : "Exact time. If your Redmine only accepts fixed steps, this is set for you the first time it refuses a time."}
             </span>
           </div>
+          {/* A step is only ever set by the app, never picked: with none set there is nothing else to choose. */}
           <select
             class="choice"
             aria-label="Time increments"
+            disabled={prefs.increment === 0}
             value={prefs.increment}
             onChange={(e) => onChange({ increment: Number(e.currentTarget.value) })}
           >
-            {INCREMENT_CHOICES.map((n) => (
-              <option key={n} value={n}>
-                {INCREMENT_LABEL[n]}
+            <option value={0}>{INCREMENT_LABEL[0]}</option>
+            {prefs.increment > 0 && (
+              <option value={prefs.increment} disabled>
+                {INCREMENT_LABEL[prefs.increment] ?? `${prefs.increment} h`}
               </option>
-            ))}
+            )}
           </select>
         </section>
 
@@ -123,40 +127,18 @@ export function Settings({ prefs, onChange, user, host, onSignOut, onClose }: Pr
           <>
             <section class="setting sub">
               <div class="setting-text">
-                <b>Pause when idle for</b>
-                <span class="muted small-text">
-                  {idleKnown ? "Idle time isn't counted." : "Not available on this system, so a timer keeps running until you pause it."}
-                </span>
-              </div>
-              <select
-                class="choice"
-                aria-label="Pause when idle for"
-                disabled={!idleKnown}
-                value={prefs.idleMinutes}
-                onChange={(e) => onChange({ idleMinutes: Number(e.currentTarget.value) })}
-              >
-                {IDLE_CHOICES.map((n) => (
-                  <option key={n} value={n}>
-                    {n === 0 ? "Never" : minutes(n)}
-                  </option>
-                ))}
-              </select>
-            </section>
-
-            <section class="setting sub">
-              <div class="setting-text">
                 <b>Log a paused timer after</b>
-                <span class="muted small-text">So a forgotten timer isn't lost.</span>
+                <span class="muted small-text">So a forgotten timer isn't lost. Pause or stop it yourself when you step away.</span>
               </div>
               <select
                 class="choice"
                 aria-label="Log a paused timer after"
-                value={prefs.autoLogMinutes}
-                onChange={(e) => onChange({ autoLogMinutes: Number(e.currentTarget.value) })}
+                value={prefs.logPausedAfter}
+                onChange={(e) => onChange({ logPausedAfter: Number(e.currentTarget.value) })}
               >
                 {AUTOLOG_CHOICES.map((n) => (
                   <option key={n} value={n}>
-                    {n === 0 ? "Never" : n === 60 ? "1 hour" : n === 120 ? "2 hours" : minutes(n)}
+                    {logAfterLabel(n)}
                   </option>
                 ))}
               </select>

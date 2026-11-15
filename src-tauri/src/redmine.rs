@@ -429,27 +429,32 @@ impl Redmine {
     /// user's open assigned issues.
     pub async fn search_issues(&self, query: &str) -> Result<Vec<IssueHit>> {
         let q = query.trim().trim_start_matches('#').trim();
-        let mut hits: Vec<IssueHit> = Vec::new();
-
-        if let Ok(id) = q.parse::<u64>() {
-            if let Ok(v) = self.get(&format!("/issues/{id}.json"), &[]).await {
-                hits.extend(parse_issue(&v["issue"]));
+        // The exact ticket and the list are independent, so they are asked for together.
+        let exact = async {
+            match q.parse::<u64>() {
+                Ok(id) => self.get(&format!("/issues/{id}.json"), &[]).await.ok(),
+                Err(_) => None,
             }
-        }
-
-        let list = if q.is_empty() {
-            self.get(
-                "/issues.json",
-                &[kv("assigned_to_id", "me"), kv("status_id", "open"), kv("limit", 25), kv("sort", "updated_on:desc")],
-            )
-            .await?
-        } else {
-            self.get(
-                "/issues.json",
-                &[kv("subject", format!("~{q}")), kv("status_id", "*"), kv("limit", 20), kv("sort", "updated_on:desc")],
-            )
-            .await?
         };
+        let list = async {
+            if q.is_empty() {
+                self.get(
+                    "/issues.json",
+                    &[kv("assigned_to_id", "me"), kv("status_id", "open"), kv("limit", 25), kv("sort", "updated_on:desc")],
+                )
+                .await
+            } else {
+                self.get(
+                    "/issues.json",
+                    &[kv("subject", format!("~{q}")), kv("status_id", "*"), kv("limit", 20), kv("sort", "updated_on:desc")],
+                )
+                .await
+            }
+        };
+        let (exact, list) = tokio::join!(exact, list);
+        let list = list?;
+
+        let mut hits: Vec<IssueHit> = exact.iter().filter_map(|v| parse_issue(&v["issue"])).collect();
         for issue in list["issues"].as_array().into_iter().flatten() {
             if let Some(hit) = parse_issue(issue) {
                 if !hits.iter().any(|h| h.id == hit.id) {
@@ -464,25 +469,29 @@ impl Redmine {
     /// list. Never fails: if Redmine is too old to list them, the server-side
     /// default applies.
     pub async fn activities(&self, project_id: Option<u64>) -> Vec<Activity> {
-        let global = match self.get("/enumerations/time_entry_activities.json", &[]).await {
+        // The global list and the project's own are independent, so they are asked for together.
+        let global_req = self.get("/enumerations/time_entry_activities.json", &[]);
+        let project_req = async {
+            match project_id {
+                Some(pid) => self.get(&format!("/projects/{pid}.json"), &[kv("include", "time_entry_activities")]).await.ok(),
+                None => None,
+            }
+        };
+        let (global, project) = tokio::join!(global_req, project_req);
+        let global = match global {
             Ok(v) => parse_activities(&v["time_entry_activities"]),
             Err(_) => Vec::new(),
         };
-        if let Some(pid) = project_id {
-            let res = self
-                .get(&format!("/projects/{pid}.json"), &[kv("include", "time_entry_activities")])
-                .await;
-            if let Ok(v) = res {
-                let mut list = parse_activities(&v["project"]["time_entry_activities"]);
-                if !list.is_empty() {
-                    let default_name = global.iter().find(|a| a.is_default).map(|a| a.name.clone());
-                    for a in &mut list {
-                        if !a.is_default {
-                            a.is_default = default_name.as_deref() == Some(a.name.as_str());
-                        }
+        if let Some(v) = project {
+            let mut list = parse_activities(&v["project"]["time_entry_activities"]);
+            if !list.is_empty() {
+                let default_name = global.iter().find(|a| a.is_default).map(|a| a.name.clone());
+                for a in &mut list {
+                    if !a.is_default {
+                        a.is_default = default_name.as_deref() == Some(a.name.as_str());
                     }
-                    return list;
                 }
+                return list;
             }
         }
         global

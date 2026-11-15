@@ -1,14 +1,14 @@
-mod idle;
 mod redmine;
 mod secrets;
 mod sso;
 mod store;
+mod tray;
 
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem, MenuItemKind, Submenu, HELP_SUBMENU_ID};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, State, WindowEvent};
 use tokio::sync::oneshot;
 
 use redmine::{Activity, Entry, Error, IssueHit, NewEntry, Redmine, Result, User};
@@ -175,11 +175,10 @@ async fn delete_time_entry(state: State<'_, AppState>, id: u64) -> Result<()> {
     state.client()?.client.delete_entry(id).await
 }
 
-/// Seconds since the last keyboard or mouse input anywhere on the system, or `None`
-/// where that can't be read. The timer polls this to pause itself when you walk away.
+/// The timer's state, for the menu-bar icon (see tray.rs). The web view sends it whenever the timer changes.
 #[tauri::command]
-fn idle_seconds() -> Option<f64> {
-    idle::seconds()
+fn timer_status(app: AppHandle, status: tray::Status) {
+    tray::update(&app, status);
 }
 
 /// The addresses the web view can ask to have opened: where "Report a bug" goes (the project's list of issues, to
@@ -244,7 +243,16 @@ pub fn run() {
         .manage(AppState::default())
         .setup(|app| {
             store::init(app.handle());
+            tray::init(app.handle())?;
             Ok(())
+        })
+        // Closing the window hides it; the app, and a timer in it, keeps running until it is quit (⌘Q or the
+        // menu-bar icon's Quit). Clicking the Dock icon or the menu-bar icon brings the window back.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
         })
         // The standard macOS menus plus Account → Settings… and Sign Out, so neither
         // depends on finding a control inside the window.
@@ -279,10 +287,17 @@ pub fn run() {
             create_time_entry,
             update_time_entry,
             delete_time_entry,
-            idle_seconds,
+            timer_status,
             report_bug,
             open_profile,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Redmine Time Tracker");
+        .build(tauri::generate_context!())
+        .expect("error while building Redmine Time Tracker")
+        .run(|_app, _event| {
+            // Clicking the Dock icon while the window is hidden opens it again.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                tray::show_main(_app);
+            }
+        });
 }

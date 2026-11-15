@@ -65,6 +65,14 @@ export interface EntryPatch {
   activityId?: number;
 }
 
+export interface TimerStatus {
+  kind: "none" | "running" | "paused";
+  /** Time counted when this was sent; the menu bar carries on from it while running. */
+  elapsedMs: number;
+  /** "#1042 Login redirect…" */
+  label: string;
+}
+
 export type ProfileSite = "github" | "wordpress";
 
 const inTauri = "__TAURI_INTERNALS__" in window;
@@ -110,8 +118,8 @@ export const api = {
   createEntry: (input: NewEntry) => call<Entry>("create_time_entry", { input }),
   updateEntry: (id: number, patch: EntryPatch) => call<Entry>("update_time_entry", { id, ...patch }),
   deleteEntry: (id: number) => call<void>("delete_time_entry", { id }),
-  /** Seconds since the last keyboard or mouse input anywhere on this Mac; null where it can't be read. */
-  idleSeconds: () => call<number | null>("idle_seconds"),
+  /** Tells the menu-bar icon about the timer, so it can show the clock while the window is closed. */
+  timerStatus: (status: TimerStatus) => call<void>("timer_status", { status }),
   /** Opens the project's list of GitHub issues in the browser. */
   reportBug: () => call<void>("report_bug"),
   /** Opens one of the author's profiles in the browser (the About popup). The address is fixed in Rust. */

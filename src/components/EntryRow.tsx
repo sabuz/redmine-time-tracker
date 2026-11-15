@@ -1,5 +1,6 @@
 import type { Entry } from "../api";
 import { fmt } from "../hours";
+import { TimedTip } from "./TimedTip";
 
 interface Props {
   entry: Entry;
@@ -17,14 +18,6 @@ interface Props {
   locked?: boolean;
   /** Stretches the timer has logged to this entry, as [start, end] epoch ms. */
   timed?: [number, number][];
-}
-
-const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-
-function timedText(sessions: [number, number][]): string {
-  const shown = sessions.slice(-4).map(([a, b]) => `${clock(a)}–${clock(b)}`);
-  const more = sessions.length - shown.length;
-  return `Timed: ${more > 0 ? `+${more} earlier, ` : ""}${shown.join(", ")}`;
 }
 
 export function EntryRow({ entry, onMenu, onEdit, menuOpen, onPlay, playSlot, locked, timed }: Props) {
@@ -51,11 +44,7 @@ export function EntryRow({ entry, onMenu, onEdit, menuOpen, onPlay, playSlot, lo
       <div class="row-main">
         <div class="row-title">
           {entry.issueId && <span class="id">#{entry.issueId}</span>} {title}
-          {timed && (
-            <span class="timed" title={timedText(timed)} aria-label={timedText(timed)}>
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="6" /><path d="M8 4.5V8l2.2 1.4" /></svg>
-            </span>
-          )}
+          {timed && <TimedTip sessions={timed} />}
         </div>
         <div class="row-note">{entry.comments || <span class="faint">No notes</span>}</div>
       </div>

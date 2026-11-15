@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { api, errMsg, type Entry, type EntryPatch, type SessionInfo } from "../api";
 import { addDays, canChangeOn, canLogOn, dayLong, iso, loggableRange, parseIso, startOfWeek, weekDays, weekdayShort } from "../dates";
 import { useTauriEvent } from "../events";
-import { fmt } from "../hours";
+import { fmt, withStepRetry } from "../hours";
 import type { Prefs } from "../settings";
 import { canTrackOn, elapsedMs, formatClock } from "../timer";
 import { useTimer } from "../useTimer";
@@ -110,17 +110,17 @@ export function Timesheet({ session, prefs, onPrefsChange, onSignedOut }: Props)
   const timer = useTimer({
     url: session.url,
     enabled: prefs.timerEnabled,
-    idleMinutes: prefs.idleMinutes,
     minSessionMinutes: prefs.minSessionMinutes,
     increment: prefs.increment,
-    autoLogMinutes: prefs.autoLogMinutes,
+    onIncrementLearned: (step) => onPrefsChange({ increment: step }),
+    logPausedAfter: prefs.logPausedAfter,
     notify: setToast,
     onLogged: () => void load(true),
   });
 
   // A running timer is paused and saved before leaving, so it is still there at the next sign-in.
   const signOut = async () => {
-    timer.pause();
+    timer.hold();
     await timer.flush();
     onSignedOut();
   };
@@ -135,6 +135,10 @@ export function Timesheet({ session, prefs, onPrefsChange, onSignedOut }: Props)
   // The native "Account" menu items (Settings… ⌘, and Sign Out ⇧⌘O) are handled in Rust and forwarded here.
   useTauriEvent("sign-out", () => void signOut());
   useTauriEvent("open-settings", () => setSettingsOpen(true));
+  // The menu-bar icon's timer items.
+  useTauriEvent("timer-pause", () => timer.pause());
+  useTauriEvent("timer-resume", () => timer.resume());
+  useTauriEvent("timer-stop", () => void timer.stop());
 
   // --- derived -------------------------------------------------------------
   const byDay = useMemo(() => {
@@ -166,16 +170,26 @@ export function Timesheet({ session, prefs, onPrefsChange, onSignedOut }: Props)
   const canChange = canChangeOn(selected, today);
   const lockedWhy = "Previous months are read-only";
 
+  // Redmine can't say whether it wants fixed steps. With none set, a refused off-step time is retried in quarter
+  // hours and, if that works, the step is remembered (Settings → Time increments).
+  const retryInSteps = <T,>(hours: number, attempt: (hours: number) => Promise<T>) =>
+    withStepRetry(hours, prefs.increment, errMsg, attempt, (step) => {
+      onPrefsChange({ increment: step });
+      setToast("Your Redmine only accepts 15-minute steps, so Time increments is now set to that.");
+    });
+
   const add = async (v: SaveValues) => {
     if (!canAdd) throw `${closedWhy}.`;
-    const created = await api.createEntry({
-      issueId: v.issue.id,
-      projectId: v.issue.projectId,
-      spentOn: selected,
-      hours: v.hours,
-      comments: v.comments,
-      activityId: v.activityId,
-    });
+    const created = await retryInSteps(v.hours, (hours) =>
+      api.createEntry({
+        issueId: v.issue.id,
+        projectId: v.issue.projectId,
+        spentOn: selected,
+        hours,
+        comments: v.comments,
+        activityId: v.activityId,
+      }),
+    );
     setEntries((es) => [...es, created]);
     setEditing(null);
   };
@@ -186,7 +200,9 @@ export function Timesheet({ session, prefs, onPrefsChange, onSignedOut }: Props)
     if (v.hours !== entry.hours) patch.hours = v.hours;
     if (v.comments !== entry.comments) patch.comments = v.comments;
     if (v.activityId !== undefined && v.activityId !== entry.activityId) patch.activityId = v.activityId;
-    if (Object.keys(patch).length) replace(await api.updateEntry(entry.id, patch));
+    if (Object.keys(patch).length) {
+      replace(await retryInSteps(patch.hours ?? entry.hours, (hours) => api.updateEntry(entry.id, patch.hours === undefined ? patch : { ...patch, hours })));
+    }
     setEditing(null);
   };
 

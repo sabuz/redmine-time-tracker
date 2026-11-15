@@ -16,8 +16,6 @@ import {
   recoverTimer,
   resumeTimer,
   startTimer,
-  watch,
-  SLEEP_GAP_MS,
   type Ledger,
 } from "./timer.ts";
 
@@ -53,9 +51,9 @@ test("elapsed time counts only the stretches that ran", () => {
 
 test("pausing in the past, and pausing an empty stretch", () => {
   const t = timer();
-  assert.equal(pauseTimer(t, T0 - 5, "idle").segments.length, 0, "can't end before it started");
-  const p = pauseTimer(t, T0 + min(3), "idle");
-  assert.deepEqual(p.paused, { reason: "idle", at: T0 + min(3) });
+  assert.equal(pauseTimer(t, T0 - 5, "closed").segments.length, 0, "can't end before it started");
+  const p = pauseTimer(t, T0 + min(3), "closed");
+  assert.deepEqual(p.paused, { reason: "closed", at: T0 + min(3) });
   assert.equal(pauseTimer(p, T0 + min(9), "manual"), p, "already paused");
   assert.equal(resumeTimer(t, T0 + 1), t, "already running");
 });
@@ -65,29 +63,6 @@ test("a timer found running at launch is cut off where the app was last seen", (
   const r = recoverTimer(t);
   assert.equal(r.paused?.reason, "closed");
   assert.equal(elapsedMs(r, T0 + min(600)), min(7));
-});
-
-test("idle: pauses at the last input, not when the limit was noticed", () => {
-  const t = timer();
-  const now = T0 + min(10);
-  const hit = watch(t, { now, lastTick: now - 5000, idleSecs: 150, idleLimitSecs: 120 });
-  assert.deepEqual(hit, { at: now - 150_000, reason: "idle" });
-  assert.equal(watch(t, { now, lastTick: now - 5000, idleSecs: 119, idleLimitSecs: 120 }), null);
-  assert.equal(watch(t, { now, lastTick: now - 5000, idleSecs: 9999, idleLimitSecs: null }), null, "detection off");
-  assert.equal(watch(t, { now, lastTick: now - 5000, idleSecs: null, idleLimitSecs: 120 }), null, "unknown on this OS");
-  assert.equal(watch(pauseTimer(t, now, "manual"), { now, lastTick: now, idleSecs: 999, idleLimitSecs: 60 }), null);
-});
-
-test("sleep: a long gap between checks pauses at the last check", () => {
-  const t = timer();
-  const now = T0 + min(120);
-  const hit = watch(t, { now, lastTick: T0 + min(20), idleSecs: 0, idleLimitSecs: 120 });
-  assert.deepEqual(hit, { at: T0 + min(20), reason: "asleep" });
-  assert.equal(watch(t, { now, lastTick: now - SLEEP_GAP_MS, idleSecs: 0, idleLimitSecs: 120 }), null, "exactly the limit is fine");
-  // Idle before the lid closed: the earlier moment wins.
-  const both = watch(t, { now, lastTick: T0 + min(20), idleSecs: 110 * 60, idleLimitSecs: 120 });
-  assert.equal(both?.reason, "idle");
-  assert.equal(both?.at, T0 + min(10));
 });
 
 test("stop: the total is rounded UP to the next quarter hour", () => {
@@ -220,11 +195,12 @@ test("a paused timer is logged for you once it has been paused long enough", () 
   const paused = pauseTimer(timer(), T0, "manual");
   assert.equal(dueForAutoLog(paused, T0 + min(29), 30), false);
   assert.equal(dueForAutoLog(paused, T0 + min(30), 30), true);
-  assert.equal(dueForAutoLog(paused, T0 + min(500), 0), false, "0 means never");
+  assert.equal(dueForAutoLog(paused, T0, 0), true, "0 logs it the moment it is paused");
+  assert.equal(dueForAutoLog(paused, T0 + min(500), 0), true);
   assert.equal(dueForAutoLog(timer(), T0 + min(500), 30), false, "a running timer is never logged for you");
-  // A pause by idleness is dated at the last input, so the wait is counted from there.
-  const idle = pauseTimer(timer(), T0 + min(10), "idle");
-  assert.equal(dueForAutoLog(idle, T0 + min(40), 30), true);
+  // A pause by a quit or crash is dated at the last heartbeat, so the wait is counted from there.
+  const closed = pauseTimer(timer(), T0 + min(10), "closed");
+  assert.equal(dueForAutoLog(closed, T0 + min(40), 30), true);
 });
 
 test("logging for you never deletes: a timer under the minimum is left for you to decide", () => {

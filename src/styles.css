@@ -936,8 +936,90 @@ button.toggle:hover:not(:disabled) {
 .timed {
   display: inline-flex;
   margin-left: 6px;
+  padding: 2px;
+  border-radius: 4px;
   color: var(--faint);
-  vertical-align: -1px;
+  vertical-align: -3px;
+  cursor: default;
+}
+.timed:hover,
+.timed:focus-visible {
+  color: var(--accent-text);
+}
+
+/* The card that opens from the clock beside a timed entry. Fixed to the window so the scrolling list can't clip it. */
+.tip {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 272px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  line-height: 1.3;
+  cursor: default;
+  pointer-events: none;
+}
+.tip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--fs-sm);
+}
+.tip-chart {
+  display: block;
+  overflow: visible;
+}
+.tip-chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.tip-chart .axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.tip-chart .break {
+  stroke: var(--faint);
+  stroke-width: 1;
+  stroke-dasharray: 1 3;
+}
+.tip-chart .tick {
+  fill: var(--muted);
+  font-size: var(--fs-2xs);
+}
+.tip-chart .area {
+  fill: var(--accent-soft);
+}
+.tip-chart .series {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.tip-chart .dot {
+  fill: var(--accent);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+.tip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- right-click menu ---------- */

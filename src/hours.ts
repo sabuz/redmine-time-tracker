@@ -1,7 +1,8 @@
 /**
- * Many companies only accept time in fixed steps (quarter hours, say). Redmine can't tell an app
- * about such a policy, so it is a setting: `increment` is the step in hours, or 0 for none.
- * Quarter hours are the default.
+ * Many companies only accept time in fixed steps (quarter hours, say). Redmine can't tell an app about
+ * such a policy, so the app starts with no step (`increment` is 0) and learns the step the first time Redmine
+ * refuses an off-step time (see `looksLikeStepRefusal`). A step is in hours; 0 means none.
+ * Quarter hours are the step that rule is learned as, and what callers get if they don't say.
  */
 export const DEFAULT_INCREMENT = 0.25;
 export const MAX_HOURS = 24;
@@ -25,15 +26,37 @@ export const stepOf = (increment: number): number => (increment > 0 ? increment 
 export const smallest = (increment: number): number => (increment > 0 ? increment : 0.01);
 
 /**
- * Redmine can't say whether it wants fixed steps, but it does refuse values it dislikes. When it
- * refuses an off-step time and no step is set, point at the setting.
+ * Whether Redmine's refusal of `hours` looks like a fixed-step rule (15-minute steps, say) that the app doesn't
+ * know about yet. Only a guess, from the wording and from the time being off the quarter-hour grid; the caller
+ * retries on the grid and only believes the guess if that works.
  */
-export function stepHint(message: string, hours: number, increment: number): string {
-  const offQuarter = Math.abs(hours * 4 - Math.round(hours * 4)) > 1e-9;
-  if (increment === 0 && offQuarter && /hour|time|step|increment|multiple|quarter/i.test(message)) {
-    return `${message} If your company only accepts fixed steps such as quarter hours, set Time increments in Settings.`;
+export function looksLikeStepRefusal(message: string, hours: number, increment: number): boolean {
+  const offGrid = Math.abs(hours / DEFAULT_INCREMENT - Math.round(hours / DEFAULT_INCREMENT)) > 1e-9;
+  return increment === 0 && offGrid && /hour|time|step|increment|multiple|quarter|minute|divis/i.test(message);
+}
+
+/**
+ * Runs `attempt(hours)`. If Redmine refuses it in a way that looks like a fixed-step rule and no step is set,
+ * tries once more with the time rounded up to the step; `onLearned` is called only if that works.
+ * If the retry fails too, the first error is what the caller sees.
+ */
+export async function withStepRetry<T>(
+  hours: number,
+  increment: number,
+  messageOf: (error: unknown) => string,
+  attempt: (hours: number) => Promise<T>,
+  onLearned: (step: number) => void,
+): Promise<T> {
+  try {
+    return await attempt(hours);
+  } catch (e) {
+    if (!looksLikeStepRefusal(messageOf(e), hours, increment)) throw e;
+    const result = await attempt(roundUp(hours, DEFAULT_INCREMENT)).catch(() => {
+      throw e;
+    });
+    onLearned(DEFAULT_INCREMENT);
+    return result;
   }
-  return message;
 }
 
 export const clamp = (hours: number): number => Math.min(MAX_HOURS, Math.max(0, hours));

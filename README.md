@@ -32,9 +32,9 @@ You can add time to any day from the 1st of the current month to the end of the 
 
 ### Hours
 
-Hours go in quarter-hour steps by default. You can type `1.5`, `1:30`, `1h30` or `90m`, and it rounds to the nearest step, so 25 minutes becomes 0.5. The up and down arrow keys move one step at a time.
+Hours are exact by default (to 0.01 hours). You can type `1.5`, `1:30`, `1h30` or `90m`. The up and down arrow keys move one step at a time.
 
-Some companies require fixed steps and some don't, and Redmine doesn't tell apps which kind you have. So you choose in Settings → Time increments: none (exact, to 0.01 hours), 15 minutes, 30 minutes or 1 hour. If Redmine rejects an odd value while this is set to none, the error message points you to that setting.
+Some companies require fixed steps (15 minutes, say) and some don't, and Redmine doesn't tell apps which kind you have. So the app starts with none. The first time Redmine refuses a time that isn't a multiple of 15 minutes, the app tries again rounded up to the next quarter hour, and if Redmine takes that, it sets Settings → Time increments to 15 min and keeps it. That setting can only be set automatically; you can switch it back to none, but not to a step of your own.
 
 ## Timer
 
@@ -46,15 +46,16 @@ How it behaves:
 - **Stopping.** The button on the timer row pauses and resumes. To stop and log, or to throw the timer away, right-click the row.
 - **One timer at a time.** Starting a second one stops and logs the first.
 - **Which day it logs to.** The day you started it from, which has to be today or an earlier day this month. If that day slips into a previous month while the timer is paused (over midnight on the 1st, say), you can't resume it, only stop it, so the time still gets logged.
-- **Rounding.** The total for a ticket and day is rounded up to your increment, so 25 minutes becomes 30 with quarter-hour steps. It doesn't pile up: whatever was rounded up is taken off the next stop on the same ticket and day, so six 10-minute stops come to exactly 1.00 hours, not 1.50. Times you type yourself are rounded to the nearest step instead.
+- **Rounding.** With no increment the time is exact. With one (15 minutes, once Redmine has asked for it), the total for a ticket and day is rounded up to it, so 25 minutes becomes 30. It doesn't pile up: whatever was rounded up is taken off the next stop on the same ticket and day, so six 10-minute stops come to exactly 1.00 hours, not 1.50. Times you type yourself are rounded to the nearest step instead.
 - **One row per ticket per day.** If the ticket already has an entry for that day, the timer adds to it and appends its notes instead of creating a second row.
-- **It pauses when you stop working.** If there's no keyboard or mouse activity anywhere on the Mac for the idle time you set, the timer pauses, and the idle time isn't counted. It also notices when the Mac went to sleep. macOS gives the app the idle time without any permission prompt. On other systems this isn't available, and Settings says so.
+- **Pausing is up to you.** The timer doesn't guess that you walked away or that the Mac went to sleep; it counts until you pause or stop it, so pause it before you step away.
+- **It keeps running in the background.** Closing the window (the red button or ⌘W) only hides it; the app and its timer carry on until you quit with ⌘Q or the menu-bar icon's Quit. A clock icon in the macOS menu bar shows the timer's hours and minutes (⏸ when paused), and its menu has Pause, Resume, Stop and log to Redmine, Open and Quit. Click the Dock icon or choose Open to bring the window back. Stopping from the icon opens the window so you can see the result.
 - **It survives quitting.** The timer is saved as it changes. If the app closes or crashes while it runs, it comes back paused, counted up to the last 15-second check.
-- **A forgotten paused timer gets logged.** After the time you choose (30 minutes by default), the app stops the timer and logs it as if you'd pressed Stop, and shows a message. A timer reopened after days is logged straight away. This never deletes anything: a timer shorter than "Ignore timers shorter than" is left for you to decide. If Redmine refuses (you're offline, or the month is locked), the timer stays, with the error, and isn't tried again until it's paused again or the app restarts.
+- **A paused timer gets logged.** After the time you choose (1 hour by default, up to 6 hours, or as soon as the timer is stopped), the app stops the timer and logs it as if you'd pressed Stop, and shows a message. A timer reopened after days is logged straight away. This never deletes anything: a timer shorter than "Ignore timers shorter than" is left for you to decide. If Redmine refuses (you're offline, or the month is locked), the timer stays, with the error, and isn't tried again until it's paused again or the app restarts.
 
-The timer settings are: pause after 1, 2, 5, 10 or 15 minutes idle, or never (default 5); log a paused timer after 15, 30, 60 or 120 minutes, or never (default 30); ignore timers shorter than 1, 2 or 5 minutes, or keep everything (default 5). Turning the timer off pauses a running one, and its row stays until you stop or discard it.
+The timer settings are: log a paused timer after the timer is stopped, or 1 to 6 hours (default 1 hour); ignore timers shorter than 1, 2 or 5 minutes, or keep everything (default 5). Turning the timer off pauses a running one, and its row stays until you stop or discard it.
 
-Stopped timers leave a small record in `timer.json` for 7 days: the stretches you worked, plus how much the rounding gave extra. That's what lets two stops on the same day combine, and what puts a clock icon on the row with the times. After 7 days Redmine is the only record. A timer you haven't stopped is kept until you stop or discard it.
+Stopped timers leave a small record in `timer.json` for 7 days: the stretches you worked, plus how much the rounding gave extra. That's what lets two stops on the same day combine, and what puts a clock icon on the row: hover it for a small line chart of the time worked and the stretches it came from. After 7 days Redmine is the only record. A timer you haven't stopped is kept until you stop or discard it.
 
 The running time isn't included in the day and week totals. They only show what's already logged.
 
@@ -156,6 +157,6 @@ Redmine Time Tracker is released under the [MIT License](LICENSE). The icons and
 
 ## Roadmap
 
-- Count idle time back in when you return to a paused timer, and show the running time in the menu bar
+- Pause the timer when you are away from the keyboard (removed for now), and show the running time in the menu bar
 - Windows and Linux builds (Tauri supports them, and nothing in how the app stores data is Mac-specific)
 - Code signing and notarization, so the `.dmg` opens without the warning

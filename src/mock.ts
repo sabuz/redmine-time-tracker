@@ -75,6 +75,13 @@ const entries: Entry[] = [
 
 const session: SessionInfo = { url: "https://redmine.example.com", user: { id: 1, login: "alex", name: "Alex Rivera" } };
 
+/** Set `window.__step = true` in the console to make this fake Redmine refuse times that aren't multiples of 15 minutes. */
+function assertStep(hours: number) {
+  if ((window as unknown as { __step?: boolean }).__step && Math.abs(hours * 4 - Math.round(hours * 4)) > 1e-9) {
+    throw "Hours must be a multiple of 15 minutes";
+  }
+}
+
 export async function mock<T>(cmd: string, args: Record<string, unknown> = {}): Promise<T> {
   await delay();
   return handle(cmd, args) as T;
@@ -113,6 +120,7 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
       return activities;
     case "create_time_entry": {
       const input = args.input as NewEntry;
+      assertStep(input.hours);
       const issue = issues.find((i) => i.id === input.issueId)!;
       const activity = activities.find((a) => a.id === input.activityId) ?? activities[1];
       const created: Entry = {
@@ -132,6 +140,7 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
     }
     case "update_time_entry": {
       const e = entries.find((x) => x.id === args.id)!;
+      if (typeof args.hours === "number") assertStep(args.hours);
       if (typeof args.hours === "number") e.hours = Math.round(args.hours * 100) / 100;
       if (typeof args.comments === "string") e.comments = args.comments;
       if (typeof args.activityId === "number") {
@@ -143,9 +152,8 @@ function handle(cmd: string, args: Record<string, unknown>): unknown {
     case "delete_time_entry":
       entries.splice(entries.findIndex((x) => x.id === args.id), 1);
       return null;
-    case "idle_seconds":
-      // Set `window.__idle = 150` in the console to pretend nobody has touched the machine for 150 s.
-      return (window as unknown as { __idle?: number }).__idle ?? 0;
+    case "timer_status":
+      return null; // the menu-bar icon only exists in the app
     case "report_bug":
       window.open("https://github.com/sabuz/redmine-desktop/issues", "_blank", "noopener");
       return null;

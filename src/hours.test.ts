@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseHours, snap, fmt, smallest, stepHint, stepOf } from "./hours.ts";
+import { parseHours, snap, fmt, smallest, looksLikeStepRefusal, stepOf, withStepRetry } from "./hours.ts";
 
 test("parses plain decimals and snaps to quarters", () => {
   assert.equal(parseHours("1.5"), 1.5);
@@ -56,10 +56,45 @@ test("the + and − buttons use the step, or a quarter hour when there is none",
   assert.equal(smallest(0), 0.01);
 });
 
-test("a refusal of an off-step time points at the setting, once, and only when it may be the cause", () => {
+test("a refusal of an off-step time is taken for a step rule only when that may be the cause", () => {
   const refused = "Hours is invalid";
-  assert.match(stepHint(refused, 0.42, 0), /Time increments/);
-  assert.equal(stepHint(refused, 0.42, 0.25), refused, "a step is already set");
-  assert.equal(stepHint(refused, 0.5, 0), refused, "0.5 is on the quarter-hour grid");
-  assert.equal(stepHint("Redmine refused the request (403).", 0.42, 0), "Redmine refused the request (403).", "unrelated error");
+  assert.equal(looksLikeStepRefusal(refused, 0.42, 0), true);
+  assert.equal(looksLikeStepRefusal("Hours must be a multiple of 15 minutes", 0.1, 0), true);
+  assert.equal(looksLikeStepRefusal(refused, 0.42, 0.25), false, "a step is already set");
+  assert.equal(looksLikeStepRefusal(refused, 0.5, 0), false, "0.5 is on the quarter-hour grid");
+  assert.equal(looksLikeStepRefusal("Redmine refused the request (403).", 0.42, 0), false, "unrelated error");
+});
+
+test("an off-step time that Redmine refuses is retried in quarter hours, and the rule is learned once that works", async () => {
+  const sent: number[] = [];
+  let learned = 0;
+  const redmine = async (h: number) => {
+    sent.push(h);
+    if (h * 4 !== Math.round(h * 4)) throw "Hours must be a multiple of 15 minutes";
+    return h;
+  };
+  const text = (e: unknown) => String(e);
+  assert.equal(await withStepRetry(0.42, 0, text, redmine, () => learned++), 0.5);
+  assert.deepEqual(sent, [0.42, 0.5]);
+  assert.equal(learned, 1);
+
+  sent.length = 0;
+  assert.equal(await withStepRetry(0.1, 0, text, redmine, () => learned++), 0.25, "never rounds down to nothing");
+  assert.equal(await withStepRetry(0.75, 0, text, redmine, () => learned++), 0.75, "on the grid: no retry, nothing learned");
+  assert.equal(learned, 2);
+});
+
+test("a retry that fails too learns nothing and shows the first error", async () => {
+  let learned = 0;
+  const calls: number[] = [];
+  const refuse = async (h: number): Promise<number> => {
+    calls.push(h);
+    throw calls.length === 1 ? "Hours is invalid" : "Month is locked";
+  };
+  await assert.rejects(withStepRetry(0.42, 0, String, refuse, () => learned++), /Hours is invalid/);
+  assert.equal(learned, 0);
+  // With a step already set, or an unrelated error, there is no second try.
+  calls.length = 0;
+  await assert.rejects(withStepRetry(0.42, 0.25, String, refuse, () => learned++));
+  assert.equal(calls.length, 1);
 });

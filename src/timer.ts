@@ -6,7 +6,7 @@
 import { iso, addDays } from "./dates.ts";
 import { DEFAULT_INCREMENT, clamp, roundUp, smallest } from "./hours.ts";
 
-export type PauseReason = "manual" | "idle" | "asleep" | "closed";
+export type PauseReason = "manual" | "closed";
 
 /** Epoch milliseconds. `end` is null while that stretch is still running. */
 export interface Segment {
@@ -52,9 +52,6 @@ export type Ledger = Record<string, LedgerItem>;
 export const KEEP_DAYS = 7;
 const MAX_SESSIONS = 50;
 
-export const TICK_MS = 5_000;
-/** The app wasn't running for this long between two checks: the Mac slept or the app was frozen. */
-export const SLEEP_GAP_MS = 60_000;
 /** How often a running timer records that the app is still alive. */
 export const HEARTBEAT_MS = 15_000;
 
@@ -69,13 +66,13 @@ export const canTrackOn = (date: string, today: string): boolean =>
 export const isRunning = (t: TimerState): boolean => !t.paused;
 
 /**
- * A timer left paused for `limitMinutes` is stopped and logged for the user, so a forgotten one
- * isn't lost. The pause is counted from when time stopped counting (a pause by idleness is dated
- * at the last keyboard or mouse input), not from when the app noticed. 0 = never. A timer that a stop
- * would drop for being too short (`minSeconds`) is left alone: logging for you must never delete.
+ * A paused timer is stopped and logged for the user once it has sat paused for `limitMinutes`, so a forgotten
+ * one isn't lost; 0 logs it the moment it is paused. The wait is counted from when time stopped counting
+ * (a pause by a quit or crash is dated at the last heartbeat), not from when the app noticed. A timer
+ * that a stop would drop for being too short (`minSeconds`) is left alone: logging for you must never delete.
  */
 export const dueForAutoLog = (t: TimerState, now: number, limitMinutes: number, minSeconds = 0): boolean =>
-  limitMinutes > 0 && !!t.paused && now - t.paused.at >= limitMinutes * 60_000 && elapsedMs(t, now) / 1000 >= minSeconds;
+  !!t.paused && now - t.paused.at >= limitMinutes * 60_000 && elapsedMs(t, now) / 1000 >= minSeconds;
 
 export function elapsedMs(t: TimerState, now: number): number {
   return t.segments.reduce((sum, s) => sum + Math.max(0, (s.end ?? now) - s.start), 0);
@@ -126,34 +123,6 @@ export function formatClock(ms: number): string {
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
-// --- noticing that nobody is working -------------------------------------------
-
-export interface WatchInput {
-  now: number;
-  /** When the previous check ran. */
-  lastTick: number;
-  /** Seconds since the last keyboard or mouse input anywhere on the system, if known. */
-  idleSecs: number | null;
-  /** Pause after this many idle seconds; null turns idle detection off. */
-  idleLimitSecs: number | null;
-}
-
-/**
- * Decides whether a running timer should stop counting, and from when. The time spent
- * idle is not counted: the pause is dated at the last keyboard or mouse input.
- */
-export function watch(t: TimerState, o: WatchInput): { at: number; reason: PauseReason } | null {
-  if (t.paused) return null;
-  let hit: { at: number; reason: PauseReason } | null = null;
-  // Checks are seconds apart; a long silence means the Mac was asleep (or the app frozen).
-  if (o.now - o.lastTick > SLEEP_GAP_MS) hit = { at: o.lastTick, reason: "asleep" };
-  if (o.idleLimitSecs !== null && o.idleSecs !== null && o.idleSecs >= o.idleLimitSecs) {
-    const at = o.now - o.idleSecs * 1000;
-    if (!hit || at < hit.at) hit = { at, reason: "idle" };
-  }
-  return hit;
 }
 
 // --- what a stop writes to Redmine ---------------------------------------------
